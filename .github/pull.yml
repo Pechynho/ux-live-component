@@ -1,0 +1,5 @@
+version: "1"
+rules:
+  - base: 2.x
+    upstream: symfony/ux-live-component:2.x
+    mergeMethod: merge

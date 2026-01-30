@@ -19,9 +19,10 @@ type MaybePromise<T = void> = T | Promise<T>;
 export type ComponentHooks = {
     connect: (component: Component) => MaybePromise;
     disconnect: (component: Component) => MaybePromise;
-    'request:started': (requestConfig: any) => MaybePromise;
+    'request:started': (requestConfig: any, controls: { abortRequest: boolean }) => MaybePromise;
+    'render:started': (html: string, backendResponse: BackendResponse, controls: { shouldRender: boolean }) => MaybePromise;
     'render:finished': (component: Component) => MaybePromise;
-    'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean }) => MaybePromise;
+    'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean; resetLoadingState: boolean }) => MaybePromise;
     'loading.state:started': (element: HTMLElement, request: BackendRequest) => MaybePromise;
     'loading.state:finished': (element: HTMLElement) => MaybePromise;
     'model:set': (model: string, value: any, component: Component) => MaybePromise;
@@ -32,6 +33,20 @@ export type ComponentHookName = keyof ComponentHooks;
 export type ComponentHookCallback<T extends string = ComponentHookName> = T extends ComponentHookName
     ? ComponentHooks[T]
     : (...args: any[]) => MaybePromise;
+
+// [CUSTOM] Convenience types for individual hook callbacks.
+// Import these in your application for type-safe hook registration:
+//   component.on('request:started', myHook satisfies RequestStartedHook);
+
+export type ConnectHook = ComponentHooks['connect'];
+export type DisconnectHook = ComponentHooks['disconnect'];
+export type RequestStartedHook = ComponentHooks['request:started'];
+export type RenderStartedHook = ComponentHooks['render:started'];
+export type RenderFinishedHook = ComponentHooks['render:finished'];
+export type ResponseErrorHook = ComponentHooks['response:error'];
+export type LoadingStateStartedHook = ComponentHooks['loading.state:started'];
+export type LoadingStateFinishedHook = ComponentHooks['loading.state:finished'];
+export type ModelSetHook = ComponentHooks['model:set'];
 
 export default class Component {
     readonly element: HTMLElement;
@@ -204,6 +219,28 @@ export default class Component {
     }
 
     /**
+     * [CUSTOM] Sends a standalone request to the given live action and returns
+     * the raw Response object.
+     *
+     * Unlike action(), this does NOT trigger a re-render of the component —
+     * it simply fires a one-off POST to the action endpoint with the current
+     * props / dirty state and returns the fetch Response so the caller can
+     * inspect status, headers, body, etc.
+     */
+    request(action: string, args: Record<string, string> = {}): Promise<Response> {
+        const backendRequest = this.backend.makeRequest(
+            this.valueStore.getOriginalProps(),
+            [{ name: action, args }],
+            this.valueStore.getDirtyProps(),
+            {},
+            this.valueStore.getUpdatedPropsFromParent(),
+            {}
+        );
+
+        return backendRequest.promise;
+    }
+
+    /**
      * Returns an array of models the user has modified, but whose model has not
      * yet been updated.
      */
@@ -283,7 +320,14 @@ export default class Component {
             updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
             files: filesToSend,
         };
-        this.hooks.triggerHook('request:started', requestConfig);
+        // [CUSTOM] Allow hooks to abort the request before it is sent.
+        const requestControls = { abortRequest: false };
+        this.hooks.triggerHook('request:started', requestConfig, requestControls);
+
+        if (requestControls.abortRequest) {
+            return;
+        }
+
         this.backendRequest = this.backend.makeRequest(
             requestConfig.props,
             requestConfig.actions,
@@ -313,12 +357,18 @@ export default class Component {
                 !headers.get('Content-Type')?.includes('application/vnd.live-component+html') &&
                 !headers.get('X-Live-Redirect')
             ) {
-                const controls = { displayError: true };
+                // [CUSTOM] Added resetLoadingState control to allow clearing loading
+                // indicators on error (e.g. spinners, disabled buttons).
+                const controls = { displayError: true, resetLoadingState: false };
                 this.valueStore.pushPendingPropsBackToDirty();
                 this.hooks.triggerHook('response:error', backendResponse, controls);
 
                 if (controls.displayError) {
                     this.renderError(html);
+                }
+
+                if (controls.resetLoadingState) {
+                    this.hooks.triggerHook('loading.state:finished', this.element);
                 }
 
                 this.backendRequest = null;

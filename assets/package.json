@@ -20,8 +20,7 @@
         "css_source": "src/live.css"
     },
     "scripts": {
-        "build": "tsx ../../../bin/build_package.ts .",
-        "watch": "tsx ../../../bin/build_package.ts . --watch",
+        "build": "tsup && mv dist/live.css dist/live.min.css",
         "test": "pnpm run test:unit && pnpm run test:browser",
         "test:unit": "../../../bin/unit_test_package.sh .",
         "test:browser": "playwright test",
@@ -60,6 +59,7 @@
         "jsdom": "^26.1.0",
         "node-fetch": "^2.6.1",
         "tslib": "^2.8.1",
+        "tsup": "^8.4.0",
         "tsx": "^4.20.3",
         "typescript": "^5.8.3",
         "vitest": "^3.2.4"

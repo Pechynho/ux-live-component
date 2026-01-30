@@ -551,7 +551,7 @@ var HookManager_default = class {
   }
 };
 
-// ../../../node_modules/.pnpm/idiomorph@0.3.0/node_modules/idiomorph/dist/idiomorph.esm.js
+// node_modules/idiomorph/dist/idiomorph.esm.js
 var Idiomorph = (function() {
   "use strict";
   let EMPTY_SET = /* @__PURE__ */ new Set();
@@ -1934,6 +1934,26 @@ var Component = class {
     return promise;
   }
   /**
+   * [CUSTOM] Sends a standalone request to the given live action and returns
+   * the raw Response object.
+   *
+   * Unlike action(), this does NOT trigger a re-render of the component —
+   * it simply fires a one-off POST to the action endpoint with the current
+   * props / dirty state and returns the fetch Response so the caller can
+   * inspect status, headers, body, etc.
+   */
+  request(action, args = {}) {
+    const backendRequest = this.backend.makeRequest(
+      this.valueStore.getOriginalProps(),
+      [{ name: action, args }],
+      this.valueStore.getDirtyProps(),
+      {},
+      this.valueStore.getUpdatedPropsFromParent(),
+      {}
+    );
+    return backendRequest.promise;
+  }
+  /**
    * Returns an array of models the user has modified, but whose model has not
    * yet been updated.
    */
@@ -1992,7 +2012,11 @@ var Component = class {
       updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
       files: filesToSend
     };
-    this.hooks.triggerHook("request:started", requestConfig);
+    const requestControls = { abortRequest: false };
+    this.hooks.triggerHook("request:started", requestConfig, requestControls);
+    if (requestControls.abortRequest) {
+      return;
+    }
     this.backendRequest = this.backend.makeRequest(
       requestConfig.props,
       requestConfig.actions,
@@ -2013,11 +2037,14 @@ var Component = class {
       }
       const headers = backendResponse.response.headers;
       if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect")) {
-        const controls = { displayError: true };
+        const controls = { displayError: true, resetLoadingState: false };
         this.valueStore.pushPendingPropsBackToDirty();
         this.hooks.triggerHook("response:error", backendResponse, controls);
         if (controls.displayError) {
           this.renderError(html);
+        }
+        if (controls.resetLoadingState) {
+          this.hooks.triggerHook("loading.state:finished", this.element);
         }
         this.backendRequest = null;
         thisPromiseResolve(backendResponse);
