@@ -234,7 +234,7 @@ declare class Component {
      * props / dirty state and returns the fetch Response so the caller can
      * inspect status, headers, body, etc.
      */
-    request(action: string, args?: Record<string, string>): Promise<Response>;
+    request(action: string, args?: any): Promise<Response>;
     /**
      * Returns an array of models the user has modified, but whose model has not
      * yet been updated.
