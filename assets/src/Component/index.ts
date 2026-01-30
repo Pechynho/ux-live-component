@@ -227,7 +227,7 @@ export default class Component {
      * props / dirty state and returns the fetch Response so the caller can
      * inspect status, headers, body, etc.
      */
-    request(action: string, args: Record<string, string> = {}): Promise<Response> {
+    request(action: string, args: any = {}): Promise<Response> {
         const backendRequest = this.backend.makeRequest(
             this.valueStore.getOriginalProps(),
             [{ name: action, args }],
