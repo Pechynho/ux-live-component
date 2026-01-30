@@ -4,7 +4,8 @@ Fork repozitáře `symfony/ux-live-component` (read-only subtree split z `symfon
 
 **Upstream:** `symfony/ux-live-component` branch `2.x`
 **Origin:** `Pechynho/ux-live-component` branch `2.x`
-**Upstream sync:** `.github/workflows/sync-upstream.yml` — GitHub Actions workflow, denně v 06:00 UTC stahuje commity a tagy z upstreamu. Při konfliktu vytvoří PR.
+**Upstream sync:** `.github/workflows/sync-upstream.yml` — GitHub Actions workflow, denně v 06:00 UTC merguje commity z upstreamu. Při konfliktu vytvoří PR.
+**Composer:** `"symfony/ux-live-component": "dev-2.x"` — vždy poslední stav forku.
 
 ## Účel forku
 
@@ -98,8 +99,9 @@ component.on('request:started', myHook);
 
 GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručně):
 - Stáhne commity z `symfony/ux-live-component:2.x` a provede merge
-- Stáhne a pushne nové upstream tagy
 - Pokud merge selže kvůli konfliktu, vytvoří PR s popisem co je potřeba vyřešit
+- Nesynkuje upstream tagy (obsahují workflow soubory, které `GITHUB_TOKEN` nemůže pushovat)
+- Fork nepoužívá vlastní tagy — v composeru se odkazuje přes `dev-2.x`
 
 ## Build
 
