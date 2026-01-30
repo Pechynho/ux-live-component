@@ -61,3 +61,39 @@ jobs:
             --head upstream-sync/${{ github.run_id }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-tags:
+    runs-on: ubuntu-latest
+    needs: sync-branch
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: 2.x
+          fetch-depth: 0
+
+      - name: Create -pechynho tags for new upstream versions
+        run: |
+          git remote add upstream https://github.com/symfony/ux-live-component.git
+          git fetch upstream --tags
+
+          # For each upstream tag, create a corresponding -pechynho tag
+          # pointing to HEAD (our fork branch) if it doesn't exist yet.
+          for upstream_tag in $(git tag -l 'v*' --sort=-v:refname); do
+            # Skip tags that are already ours
+            if echo "$upstream_tag" | grep -q -- '-pechynho'; then
+              continue
+            fi
+
+            fork_tag="${upstream_tag}-pechynho"
+
+            # Only create if it doesn't exist yet
+            if ! git rev-parse "$fork_tag" >/dev/null 2>&1; then
+              git tag "$fork_tag" HEAD
+              git push origin "$fork_tag"
+              echo "Created $fork_tag"
+            fi
+          done
