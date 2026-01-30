@@ -1,0 +1,80 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # Every day at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/symfony/ux-live-component.git
+
+      - name: Fetch upstream
+        run: git fetch upstream --tags
+
+      - name: Try fast-forward merge
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge upstream/2.x --no-edit || echo "conflict=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push if no conflict
+        if: steps.merge.outputs.conflict != 'true'
+        run: git push origin 2.x --tags
+
+      - name: Create PR on conflict
+        if: steps.merge.outputs.conflict == 'true'
+        run: |
+          git merge --abort
+          git checkout -b upstream-sync/${{ github.run_id }}
+          git merge upstream/2.x --no-commit --no-ff || true
+          git add -A
+          git commit -m "chore: merge upstream 2.x (conflicts need manual resolution)"
+          git push origin upstream-sync/${{ github.run_id }}
+          gh pr create \
+            --title "Upstream sync — merge conflicts" \
+            --body "$(cat <<'EOF'
+          Automatic merge from \`symfony/ux-live-component:2.x\` failed due to conflicts.
+
+          Please resolve the conflicts manually, then run:
+          ```
+          make assets-build
+          ```
+          to rebuild \`assets/dist/\`.
+          EOF
+          )" \
+            --base 2.x \
+            --head upstream-sync/${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-tags:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and push upstream tags
+        run: |
+          git remote add upstream https://github.com/symfony/ux-live-component.git
+          git fetch upstream --tags
+          git push origin --tags

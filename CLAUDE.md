@@ -4,7 +4,7 @@ Fork repozitáře `symfony/ux-live-component` (read-only subtree split z `symfon
 
 **Upstream:** `symfony/ux-live-component` branch `2.x`
 **Origin:** `Pechynho/ux-live-component` branch `2.x`
-**Pull app:** `.github/pull.yml` — automaticky synchronizuje `2.x` z upstreamu přes merge.
+**Upstream sync:** `.github/workflows/sync-upstream.yml` — GitHub Actions workflow, denně v 06:00 UTC stahuje commity a tagy z upstreamu. Při konfliktu vytvoří PR.
 
 ## Účel forku
 
@@ -92,11 +92,14 @@ const myHook: RequestStartedHook = (requestConfig, controls) => {
 component.on('request:started', myHook);
 ```
 
-### 6. Pull app
+### 6. Upstream sync (GitHub Actions)
 
-**Soubor:** `.github/pull.yml`
+**Soubor:** `.github/workflows/sync-upstream.yml`
 
-Konfigurace pro [Pull app](https://github.com/apps/pull) — automaticky vytváří merge PR z `symfony/ux-live-component:2.x` do `2.x` tohoto forku.
+GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručně):
+- Stáhne commity z `symfony/ux-live-component:2.x` a provede merge
+- Stáhne a pushne nové upstream tagy
+- Pokud merge selže kvůli konfliktu, vytvoří PR s popisem co je potřeba vyřešit
 
 ## Build
 
@@ -139,4 +142,4 @@ yarn build
 | `assets/src/Component/ValueStore.ts` | Správa props (original, dirty, pending) |
 | `assets/src/Component/plugins/LoadingPlugin.ts` | Loading state (spinnery, disabled) |
 | `assets/tsup.config.ts` | Build konfigurace |
-| `.github/pull.yml` | Pull app sync z upstreamu |
+| `.github/workflows/sync-upstream.yml` | GitHub Actions sync z upstreamu |
