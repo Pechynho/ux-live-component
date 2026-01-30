@@ -25,7 +25,7 @@ jobs:
       - name: Fetch upstream
         run: git fetch upstream
 
-      - name: Try fast-forward merge
+      - name: Try merge
         id: merge
         run: |
           git config user.name "github-actions[bot]"
@@ -61,25 +61,3 @@ jobs:
             --head upstream-sync/${{ github.run_id }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  sync-tags:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Sync upstream tags
-        run: |
-          git remote add upstream https://github.com/symfony/ux-live-component.git
-          git fetch upstream --tags
-
-          # Push tags one by one, skip those that fail (e.g. tags containing
-          # workflow files that GITHUB_TOKEN cannot push).
-          for tag in $(git tag -l 'v*' --sort=-v:refname); do
-            git push origin "$tag" 2>/dev/null || echo "Skipped $tag (likely contains workflow files)"
-          done
