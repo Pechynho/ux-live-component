@@ -14,7 +14,7 @@ Rozšíření TypeScript části live components o funkce, které upstream nepos
 - Možnost odeslat standalone request na live action a dostat zpět raw `Response` (bez re-renderu)
 - Rozšíření hooků o `controls` objekty pro řízení chování (abort requestu, reset loading stavu při chybě)
 - Exportované TypeScript typy pro jednotlivé hook callbacky
-- Standalone build setup (upstream buildí v monorepu, tady máme vlastní `tsup.config.ts`)
+- Standalone build setup (upstream buildí v monorepu, tady máme vlastní `tsup.config.mjs`)
 
 ## Přehled custom změn
 
@@ -108,7 +108,7 @@ GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručn�
 Upstream buildí assets v monorepu `symfony/ux` přes `bin/build_package.ts`. Tady máme standalone build:
 
 **Soubory:**
-- `assets/tsup.config.ts` — konfigurace tsup bundleru
+- `assets/tsup.config.mjs` — konfigurace tsup bundleru
 - `assets/tsconfig.json` — standalone tsconfig (upstream odkazoval na monorepo)
 - `Makefile` — make targety
 
@@ -143,5 +143,5 @@ yarn build
 | `assets/src/Backend/RequestBuilder.ts` | Sestavení URL + fetch options |
 | `assets/src/Component/ValueStore.ts` | Správa props (original, dirty, pending) |
 | `assets/src/Component/plugins/LoadingPlugin.ts` | Loading state (spinnery, disabled) |
-| `assets/tsup.config.ts` | Build konfigurace |
+| `assets/tsup.config.mjs` | Build konfigurace |
 | `.github/workflows/sync-upstream.yml` | GitHub Actions sync z upstreamu |
