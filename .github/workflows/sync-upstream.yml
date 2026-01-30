@@ -23,7 +23,7 @@ jobs:
         run: git remote add upstream https://github.com/symfony/ux-live-component.git
 
       - name: Fetch upstream
-        run: git fetch upstream --tags
+        run: git fetch upstream
 
       - name: Try fast-forward merge
         id: merge
@@ -34,7 +34,7 @@ jobs:
 
       - name: Push if no conflict
         if: steps.merge.outputs.conflict != 'true'
-        run: git push origin 2.x --tags
+        run: git push origin 2.x
 
       - name: Create PR on conflict
         if: steps.merge.outputs.conflict == 'true'
@@ -48,13 +48,13 @@ jobs:
           gh pr create \
             --title "Upstream sync — merge conflicts" \
             --body "$(cat <<'EOF'
-          Automatic merge from \`symfony/ux-live-component:2.x\` failed due to conflicts.
+          Automatic merge from `symfony/ux-live-component:2.x` failed due to conflicts.
 
           Please resolve the conflicts manually, then run:
           ```
           make assets-build
           ```
-          to rebuild \`assets/dist/\`.
+          to rebuild `assets/dist/`.
           EOF
           )" \
             --base 2.x \
@@ -73,8 +73,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch and push upstream tags
+      - name: Sync upstream tags
         run: |
           git remote add upstream https://github.com/symfony/ux-live-component.git
           git fetch upstream --tags
-          git push origin --tags
+
+          # Push tags one by one, skip those that fail (e.g. tags containing
+          # workflow files that GITHUB_TOKEN cannot push).
+          for tag in $(git tag -l 'v*' --sort=-v:refname); do
+            git push origin "$tag" 2>/dev/null || echo "Skipped $tag (likely contains workflow files)"
+          done
