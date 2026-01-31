@@ -1346,8 +1346,12 @@ var ElementChanges = class {
     element.classList.add(...this.addedClasses);
     element.classList.remove(...this.removedClasses);
     this.styleChanges.getChangedItems().forEach((change) => {
+      if (change.value.trim().endsWith("!important")) {
+        const value = change.value.replace("!important", "").trim();
+        element.style.setProperty(change.name, value, "important");
+        return;
+      }
       element.style.setProperty(change.name, change.value);
-      return;
     });
     this.styleChanges.getRemovedItems().forEach((styleName) => {
       element.style.removeProperty(styleName);

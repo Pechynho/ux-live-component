@@ -67,8 +67,15 @@ export default class ElementChanges {
         element.classList.remove(...this.removedClasses);
 
         this.styleChanges.getChangedItems().forEach((change) => {
+            // [CUSTOM] Handle !important priority — setProperty() ignores
+            // !important when it's part of the value string, it must be
+            // passed as the third argument instead.
+            if (change.value.trim().endsWith('!important')) {
+                const value = change.value.replace('!important', '').trim();
+                element.style.setProperty(change.name, value, 'important');
+                return;
+            }
             element.style.setProperty(change.name, change.value);
-            return;
         });
 
         this.styleChanges.getRemovedItems().forEach((styleName) => {
