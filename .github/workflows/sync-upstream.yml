@@ -32,6 +32,20 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git merge upstream/2.x --no-edit || echo "conflict=true" >> "$GITHUB_OUTPUT"
 
+      # Upstream may introduce .github/ files from the monorepo (PR templates,
+      # workflows like close-pull-request.yml). GITHUB_TOKEN cannot push workflow
+      # files, and these files are not relevant to this fork. Remove everything
+      # in .github/ except our own sync workflow.
+      - name: Remove unwanted upstream .github files
+        if: steps.merge.outputs.conflict != 'true'
+        run: |
+          find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
+          find .github -type d -empty -delete 2>/dev/null || true
+          if [ -n "$(git status --porcelain .github/)" ]; then
+            git add .github/
+            git commit --amend --no-edit
+          fi
+
       - name: Push if no conflict
         if: steps.merge.outputs.conflict != 'true'
         run: git push origin 2.x
@@ -42,6 +56,11 @@ jobs:
           git merge --abort
           git checkout -b upstream-sync/${{ github.run_id }}
           git merge upstream/2.x --no-commit --no-ff || true
+
+          # Remove unwanted upstream .github files (see comment above)
+          find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
+          find .github -type d -empty -delete 2>/dev/null || true
+
           git add -A
           git commit -m "chore: merge upstream 2.x (conflicts need manual resolution)"
           git push origin upstream-sync/${{ github.run_id }}
