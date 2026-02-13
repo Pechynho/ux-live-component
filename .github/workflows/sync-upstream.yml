@@ -25,51 +25,125 @@ jobs:
       - name: Fetch upstream
         run: git fetch upstream
 
-      - name: Try merge
-        id: merge
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          if git merge-base --is-ancestor upstream/2.x HEAD; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "No new upstream commits, nothing to do."
+          else
+            echo "New upstream commits found."
+          fi
+
+      - name: Configure git
+        if: steps.check.outputs.up_to_date != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git merge upstream/2.x --no-edit || echo "conflict=true" >> "$GITHUB_OUTPUT"
+
+      - name: Try merge
+        if: steps.check.outputs.up_to_date != 'true'
+        id: merge
+        run: |
+          if git merge upstream/2.x --no-edit; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          else
+            # Check which files are conflicted
+            CONFLICTED=$(git diff --name-only --diff-filter=U)
+
+            # Determine if all conflicts are auto-resolvable:
+            # - assets/dist/* → will be rebuilt
+            # - .github/*    → will be cleaned up (fork deletes upstream .github files)
+            CAN_AUTO_RESOLVE=true
+            while IFS= read -r file; do
+              case "$file" in
+                assets/dist/*) ;;
+                .github/*) ;;
+                *) CAN_AUTO_RESOLVE=false; break ;;
+              esac
+            done <<< "$CONFLICTED"
+
+            if [ "$CAN_AUTO_RESOLVE" = true ]; then
+              # Resolve dist conflicts — take ours, will rebuild after merge
+              git checkout --ours -- assets/dist/ 2>/dev/null || true
+              git add assets/dist/ 2>/dev/null || true
+
+              # Resolve .github conflicts — delete unwanted upstream files
+              find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
+              find .github -type d -empty -delete 2>/dev/null || true
+              git add .github/ 2>/dev/null || true
+
+              git commit --no-edit
+              echo "status=auto_resolved" >> "$GITHUB_OUTPUT"
+            else
+              echo "status=source_conflict" >> "$GITHUB_OUTPUT"
+            fi
+          fi
 
       # Upstream may introduce .github/ files from the monorepo (PR templates,
-      # workflows like close-pull-request.yml). GITHUB_TOKEN cannot push workflow
-      # files, and these files are not relevant to this fork. Remove everything
-      # in .github/ except our own sync workflow.
+      # workflows like close-pull-request.yml). These are not relevant to this
+      # fork. Remove everything in .github/ except our own sync workflow.
+      # This handles both cleanly-merged new files and auto-resolved conflicts.
       - name: Remove unwanted upstream .github files
-        if: steps.merge.outputs.conflict != 'true'
+        if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
         run: |
           find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
           find .github -type d -empty -delete 2>/dev/null || true
           if [ -n "$(git status --porcelain .github/)" ]; then
             git add .github/
-            git commit --amend --no-edit
+            git commit -m "chore: remove upstream .github files"
           fi
 
-      - name: Push if no conflict
-        if: steps.merge.outputs.conflict != 'true'
+      - name: Setup Node.js
+        if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: assets/yarn.lock
+
+      - name: Rebuild assets
+        if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
+        run: |
+          cd assets
+          yarn install
+          yarn build
+
+      - name: Commit rebuilt dist
+        if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
+        run: |
+          if [ -n "$(git status --porcelain assets/dist/)" ]; then
+            git add assets/dist/
+            git commit -m "chore: rebuild assets/dist after upstream sync"
+          fi
+
+      - name: Push
+        if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
         run: git push origin 2.x
 
-      - name: Create PR on conflict
-        if: steps.merge.outputs.conflict == 'true'
+      - name: Create PR on source conflict
+        if: steps.merge.outputs.status == 'source_conflict'
         run: |
           git merge --abort
           git checkout -b upstream-sync/${{ github.run_id }}
           git merge upstream/2.x --no-commit --no-ff || true
 
-          # Remove unwanted upstream .github files (see comment above)
+          # Remove unwanted upstream .github files
           find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
           find .github -type d -empty -delete 2>/dev/null || true
 
           git add -A
-          git commit -m "chore: merge upstream 2.x (conflicts need manual resolution)"
+          git commit -m "chore: merge upstream 2.x (source conflicts need manual resolution)"
           git push origin upstream-sync/${{ github.run_id }}
           gh pr create \
-            --title "Upstream sync — merge conflicts" \
+            --title "Upstream sync — source conflicts" \
             --body "$(cat <<'EOF'
-          Automatic merge from `symfony/ux-live-component:2.x` failed due to conflicts.
+          Automatic merge from `symfony/ux-live-component:2.x` failed due to conflicts in source files.
 
-          Please resolve the conflicts manually, then run:
+          Conflicts in `assets/dist/` and `.github/` are auto-resolved by the workflow.
+          Source file conflicts need manual resolution.
+
+          After resolving, run:
           ```
           make assets-build
           ```

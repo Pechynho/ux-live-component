@@ -99,7 +99,9 @@ component.on('request:started', myHook);
 
 GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručně):
 - Stáhne commity z `symfony/ux-live-component:2.x` a provede merge
-- Pokud merge selže kvůli konfliktu, vytvoří PR s popisem co je potřeba vyřešit
+- Konflikty v `assets/dist/` a `.github/` se řeší automaticky (dist se přebuildí, upstream .github soubory se smažou)
+- Po merge automaticky spustí `yarn install && yarn build` a commitne nový dist
+- Pokud merge selže kvůli konfliktu ve **zdrojových souborech** (`.ts`, `.php`, …), vytvoří PR k manuálnímu řešení
 - Nesynkuje upstream tagy (obsahují workflow soubory, které `GITHUB_TOKEN` nemůže pushovat)
 - Fork nepoužívá vlastní tagy — v composeru se odkazuje přes `dev-2.x`
 
