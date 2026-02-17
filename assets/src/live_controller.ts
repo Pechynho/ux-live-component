@@ -63,6 +63,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
         debounce: { type: Number, default: 150 },
         fingerprint: { type: String, default: '' },
         requestMethod: { type: String, default: 'post' },
+        fetchCredentials: { type: String, default: 'same-origin' },
     };
 
     declare readonly nameValue: string;
@@ -81,6 +82,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     declare readonly debounceValue: number;
     declare readonly fingerprintValue: string;
     declare readonly requestMethodValue: 'get' | 'post';
+    declare readonly fetchCredentialsValue: RequestCredentials;
 
     /** The component, wrapped in the convenience Proxy */
     private proxiedComponent: Component;
@@ -96,7 +98,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     private pendingFiles: { [key: string]: HTMLInputElement } = {};
 
     static backendFactory: (controller: LiveControllerDefault) => BackendInterface = (controller) =>
-        new Backend(controller.urlValue, controller.requestMethodValue);
+        new Backend(controller.urlValue, controller.requestMethodValue, controller.fetchCredentialsValue);
 
     initialize() {
         this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
