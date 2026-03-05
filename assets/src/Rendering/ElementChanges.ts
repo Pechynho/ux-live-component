@@ -67,15 +67,12 @@ export default class ElementChanges {
         element.classList.remove(...this.removedClasses);
 
         this.styleChanges.getChangedItems().forEach((change) => {
-            // [CUSTOM] Handle !important priority — setProperty() ignores
-            // !important when it's part of the value string, it must be
-            // passed as the third argument instead.
-            if (change.value.trim().endsWith('!important')) {
-                const value = change.value.replace('!important', '').trim();
-                element.style.setProperty(change.name, value, 'important');
-                return;
+            // https://developer.mozilla.org/en-US/docs/Web/API/CSSStyleDeclaration/setProperty
+            if (/!\s*important/i.test(change.value)) {
+                element.style.setProperty(change.name, change.value.replace(/!\s*important/i, '').trim(), 'important');
+            } else {
+                element.style.setProperty(change.name, change.value);
             }
-            element.style.setProperty(change.name, change.value);
         });
 
         this.styleChanges.getRemovedItems().forEach((styleName) => {
