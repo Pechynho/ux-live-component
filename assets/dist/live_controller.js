@@ -3068,21 +3068,24 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
       }
     }
     const finalValue = getValueFromElement(element, this.component.valueStore);
+    const finalValueIsEmpty = finalValue === "" || finalValue === null || finalValue === void 0;
     if (isTextualInputElement(element) || isTextareaElement(element)) {
-      if (modelBinding.minLength !== null && typeof finalValue === "string" && finalValue.length < modelBinding.minLength) {
+      if (!finalValueIsEmpty && modelBinding.minLength !== null && typeof finalValue === "string" && finalValue.length < modelBinding.minLength) {
         return;
       }
-      if (modelBinding.maxLength !== null && typeof finalValue === "string" && finalValue.length > modelBinding.maxLength) {
+      if (!finalValueIsEmpty && modelBinding.maxLength !== null && typeof finalValue === "string" && finalValue.length > modelBinding.maxLength) {
         return;
       }
     }
     if (isNumericalInputElement(element)) {
-      const numericValue = Number(finalValue);
-      if (modelBinding.minValue !== null && numericValue < modelBinding.minValue) {
-        return;
-      }
-      if (modelBinding.maxValue !== null && numericValue > modelBinding.maxValue) {
-        return;
+      if (!finalValueIsEmpty) {
+        const numericValue = Number(finalValue);
+        if (modelBinding.minValue !== null && numericValue < modelBinding.minValue) {
+          return;
+        }
+        if (modelBinding.maxValue !== null && numericValue > modelBinding.maxValue) {
+          return;
+        }
       }
     }
     this.component.set(modelBinding.modelName, finalValue, modelBinding.shouldRender, modelBinding.debounce);
