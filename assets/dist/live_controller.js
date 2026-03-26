@@ -1124,13 +1124,14 @@ var syncAttributes = (fromEl, toEl) => {
 function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, getElementValue, externalMutationTracker) {
   const originalElementIdsToSwapAfter = [];
   const originalElementsToPreserve = /* @__PURE__ */ new Map();
-  const preserveIdsRestoredViaInnerHtml = /* @__PURE__ */ new Set();
+  const handledPreserveIds = /* @__PURE__ */ new Set();
   const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
     const oldElement = originalElementsToPreserve.get(id);
     if (!(oldElement instanceof HTMLElement)) {
       throw new Error(`Original element with id ${id} not found`);
     }
     originalElementIdsToSwapAfter.push(id);
+    handledPreserveIds.add(id);
     if (!replaceWithClone) {
       return null;
     }
@@ -1162,6 +1163,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
         }
         if (fromEl.id && originalElementsToPreserve.has(fromEl.id)) {
           if (fromEl.id === toEl.id) {
+            handledPreserveIds.add(fromEl.id);
             return false;
           }
           const clonedFromEl = markElementAsNeedingPostMorphSwap(fromEl.id, true);
@@ -1212,14 +1214,14 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
           fromEl.innerHTML = toEl.innerHTML;
           originalElementsToPreserve.forEach((originalElement, id) => {
-            if (preserveIdsRestoredViaInnerHtml.has(id)) {
+            if (handledPreserveIds.has(id)) {
               return;
             }
             const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
-              preserveIdsRestoredViaInnerHtml.add(id);
+              handledPreserveIds.add(id);
             }
           });
           return true;

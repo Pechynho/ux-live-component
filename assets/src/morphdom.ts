@@ -40,9 +40,10 @@ export function executeMorphdom(
      */
     const originalElementIdsToSwapAfter: Array<string> = [];
     const originalElementsToPreserve = new Map<string, HTMLElement>();
-    // [CUSTOM] Track preserved elements already restored via innerHTML swap
-    // so we don't re-process them in subsequent innerHTML swaps.
-    const preserveIdsRestoredViaInnerHtml = new Set<string>();
+    // [CUSTOM] Track preserved elements already handled (by any path:
+    // Idiomorph match, clone+swap, removal, or innerHTML restore)
+    // so the innerHTML restore loop can skip them.
+    const handledPreserveIds = new Set<string>();
 
     /**
      * Called when a preserved element is about to be morphed.
@@ -59,6 +60,7 @@ export function executeMorphdom(
         }
 
         originalElementIdsToSwapAfter.push(id);
+        handledPreserveIds.add(id); // [CUSTOM]
         if (!replaceWithClone) {
             return null;
         }
@@ -102,6 +104,7 @@ export function executeMorphdom(
                     if (fromEl.id === toEl.id) {
                         // the preserved elements match, prevent morph and
                         // keep the original element
+                        handledPreserveIds.add(fromEl.id); // [CUSTOM]
                         return false;
                     }
 
@@ -212,14 +215,14 @@ export function executeMorphdom(
                     // freshly parsed nodes, losing all JS state. We search the NEW
                     // content for matching IDs and swap originals back in.
                     originalElementsToPreserve.forEach((originalElement, id) => {
-                        if (preserveIdsRestoredViaInnerHtml.has(id)) {
+                        if (handledPreserveIds.has(id)) {
                             return;
                         }
                         const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
-                            preserveIdsRestoredViaInnerHtml.add(id);
+                            handledPreserveIds.add(id);
                         }
                     });
 
