@@ -201,27 +201,20 @@ export function executeMorphdom(
                 // same place as a <div id="bar">, we replace the content to get
                 // totally fresh internals.
                 if (fromEl.hasAttribute('data-skip-morph') || (fromEl.id && fromEl.id !== toEl.id)) {
-                    // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
-                    // innerHTML is a native DOM operation that bypasses Idiomorph callbacks,
-                    // so data-live-preserve elements inside the swapped parent would be
-                    // silently replaced with freshly parsed nodes, losing all JS state.
-                    // We collect affected elements BEFORE innerHTML wipe, then restore after.
-                    const preservedInsideFromEl: Array<[string, HTMLElement]> = [];
-                    originalElementsToPreserve.forEach((originalElement, id) => {
-                        if (fromEl.contains(originalElement)) {
-                            preservedInsideFromEl.push([id, originalElement]);
-                        }
-                    });
-
                     fromEl.innerHTML = toEl.innerHTML;
 
-                    for (const [id, originalElement] of preservedInsideFromEl) {
+                    // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
+                    // innerHTML bypasses Idiomorph callbacks, so data-live-preserve
+                    // elements inside the swapped parent are silently replaced with
+                    // freshly parsed nodes, losing all JS state. We search the NEW
+                    // content for matching IDs and swap originals back in.
+                    originalElementsToPreserve.forEach((originalElement, id) => {
                         const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
                         }
-                    }
+                    });
 
                     return true;
                 }

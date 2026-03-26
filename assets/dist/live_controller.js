@@ -1209,20 +1209,14 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
           }
         }
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
-          const preservedInsideFromEl = [];
-          originalElementsToPreserve.forEach((originalElement, id) => {
-            if (fromEl.contains(originalElement)) {
-              preservedInsideFromEl.push([id, originalElement]);
-            }
-          });
           fromEl.innerHTML = toEl.innerHTML;
-          for (const [id, originalElement] of preservedInsideFromEl) {
+          originalElementsToPreserve.forEach((originalElement, id) => {
             const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
             }
-          }
+          });
           return true;
         }
         if (fromEl.parentElement?.hasAttribute("data-skip-morph")) {
