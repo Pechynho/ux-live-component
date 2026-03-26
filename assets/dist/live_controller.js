@@ -1124,6 +1124,7 @@ var syncAttributes = (fromEl, toEl) => {
 function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, getElementValue, externalMutationTracker) {
   const originalElementIdsToSwapAfter = [];
   const originalElementsToPreserve = /* @__PURE__ */ new Map();
+  const preserveIdsRestoredViaInnerHtml = /* @__PURE__ */ new Set();
   const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
     const oldElement = originalElementsToPreserve.get(id);
     if (!(oldElement instanceof HTMLElement)) {
@@ -1211,10 +1212,14 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
           fromEl.innerHTML = toEl.innerHTML;
           originalElementsToPreserve.forEach((originalElement, id) => {
+            if (preserveIdsRestoredViaInnerHtml.has(id)) {
+              return;
+            }
             const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
+              preserveIdsRestoredViaInnerHtml.add(id);
             }
           });
           return true;

@@ -40,6 +40,9 @@ export function executeMorphdom(
      */
     const originalElementIdsToSwapAfter: Array<string> = [];
     const originalElementsToPreserve = new Map<string, HTMLElement>();
+    // [CUSTOM] Track preserved elements already restored via innerHTML swap
+    // so we don't re-process them in subsequent innerHTML swaps.
+    const preserveIdsRestoredViaInnerHtml = new Set<string>();
 
     /**
      * Called when a preserved element is about to be morphed.
@@ -209,10 +212,14 @@ export function executeMorphdom(
                     // freshly parsed nodes, losing all JS state. We search the NEW
                     // content for matching IDs and swap originals back in.
                     originalElementsToPreserve.forEach((originalElement, id) => {
+                        if (preserveIdsRestoredViaInnerHtml.has(id)) {
+                            return;
+                        }
                         const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
+                            preserveIdsRestoredViaInnerHtml.add(id);
                         }
                     });
 
