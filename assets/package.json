@@ -2,7 +2,7 @@
     "name": "@symfony/ux-live-component",
     "description": "Live Component: bring server-side re-rendering & model binding to any element.",
     "license": "MIT",
-    "version": "2.32.0-pechynho",
+    "version": "2.34.0-pechynho",
     "keywords": [
         "symfony-ux",
         "twig",
@@ -59,6 +59,6 @@
         "tslib": "^2.8.1",
         "tsup": "^8.4.0",
         "typescript": "^5.8.3",
-        "vitest": "^3.2.4"
+        "vitest": "^4.1.0"
     }
 }
