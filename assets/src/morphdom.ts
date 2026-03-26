@@ -203,6 +203,18 @@ export function executeMorphdom(
                 if (fromEl.hasAttribute('data-skip-morph') || (fromEl.id && fromEl.id !== toEl.id)) {
                     fromEl.innerHTML = toEl.innerHTML;
 
+                    // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
+                    // innerHTML is a native DOM operation that bypasses Idiomorph callbacks,
+                    // so data-live-preserve elements inside the swapped parent would be
+                    // silently replaced with freshly parsed nodes, losing all JS state.
+                    originalElementsToPreserve.forEach((originalElement, id) => {
+                        const placeholder = fromEl.querySelector(`#${id}`);
+                        if (placeholder) {
+                            syncAttributes(placeholder, originalElement);
+                            placeholder.replaceWith(originalElement);
+                        }
+                    });
+
                     return true;
                 }
                 // if parent's innerHTML was replaced, skip morphing on child

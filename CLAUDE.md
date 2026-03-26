@@ -93,7 +93,15 @@ const myHook: RequestStartedHook = (requestConfig, controls) => {
 component.on('request:started', myHook);
 ```
 
-### 6. Upstream sync (GitHub Actions)
+### 6. Fix `data-live-preserve` při změně ID rodičovského elementu
+
+**Soubor:** `assets/src/morphdom.ts`
+
+Oprava bugu, kdy elementy s `data-live-preserve` ztratily svůj DOM stav (event listenery, JS stav apod.), pokud se u libovolného nadřazeného elementu změnilo `id` mezi re-rendery. Příčina: `innerHTML` swap v `beforeNodeMorphed` callbacku obcházel Idiomorph callbacky, takže preserved elementy byly tiše nahrazeny čerstvě naparsovanými nody.
+
+Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem.
+
+### 7. Upstream sync (GitHub Actions)
 
 **Soubor:** `.github/workflows/sync-upstream.yml`
 

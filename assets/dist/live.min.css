@@ -1,1 +1,6 @@
-[data-loading=""],[data-loading=show],[data-loading*=\|show]{display:none}
+/* src/live.css */
+[data-loading=""],
+[data-loading=show],
+[data-loading*="|show"] {
+  display: none;
+}
