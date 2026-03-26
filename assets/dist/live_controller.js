@@ -1142,7 +1142,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
     if (!id) {
       throw new Error("The data-live-preserve attribute requires an id attribute to be set on the element");
     }
-    const oldElement = rootFromElement.querySelector(`#${id}`);
+    const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
     if (!(oldElement instanceof HTMLElement)) {
       throw new Error(`The element with id "${id}" was not found in the original HTML`);
     }
@@ -1209,14 +1209,20 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
           }
         }
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
-          fromEl.innerHTML = toEl.innerHTML;
+          const preservedInsideFromEl = [];
           originalElementsToPreserve.forEach((originalElement, id) => {
-            const placeholder = fromEl.querySelector(`#${id}`);
+            if (fromEl.contains(originalElement)) {
+              preservedInsideFromEl.push([id, originalElement]);
+            }
+          });
+          fromEl.innerHTML = toEl.innerHTML;
+          for (const [id, originalElement] of preservedInsideFromEl) {
+            const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
             }
-          });
+          }
           return true;
         }
         if (fromEl.parentElement?.hasAttribute("data-skip-morph")) {
@@ -1240,7 +1246,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
     }
   });
   originalElementIdsToSwapAfter.forEach((id) => {
-    const newElement = rootFromElement.querySelector(`#${id}`);
+    const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
     const originalElement = originalElementsToPreserve.get(id);
     if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
       throw new Error("Missing elements.");

@@ -73,7 +73,7 @@ export function executeMorphdom(
             throw new Error('The data-live-preserve attribute requires an id attribute to be set on the element');
         }
 
-        const oldElement = rootFromElement.querySelector(`#${id}`);
+        const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
         if (!(oldElement instanceof HTMLElement)) {
             throw new Error(`The element with id "${id}" was not found in the original HTML`);
         }
@@ -201,19 +201,27 @@ export function executeMorphdom(
                 // same place as a <div id="bar">, we replace the content to get
                 // totally fresh internals.
                 if (fromEl.hasAttribute('data-skip-morph') || (fromEl.id && fromEl.id !== toEl.id)) {
-                    fromEl.innerHTML = toEl.innerHTML;
-
                     // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
                     // innerHTML is a native DOM operation that bypasses Idiomorph callbacks,
                     // so data-live-preserve elements inside the swapped parent would be
                     // silently replaced with freshly parsed nodes, losing all JS state.
+                    // We collect affected elements BEFORE innerHTML wipe, then restore after.
+                    const preservedInsideFromEl: Array<[string, HTMLElement]> = [];
                     originalElementsToPreserve.forEach((originalElement, id) => {
-                        const placeholder = fromEl.querySelector(`#${id}`);
+                        if (fromEl.contains(originalElement)) {
+                            preservedInsideFromEl.push([id, originalElement]);
+                        }
+                    });
+
+                    fromEl.innerHTML = toEl.innerHTML;
+
+                    for (const [id, originalElement] of preservedInsideFromEl) {
+                        const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
                         }
-                    });
+                    }
 
                     return true;
                 }
@@ -255,7 +263,7 @@ export function executeMorphdom(
     });
 
     originalElementIdsToSwapAfter.forEach((id: string) => {
-        const newElement = rootFromElement.querySelector(`#${id}`);
+        const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
         const originalElement = originalElementsToPreserve.get(id);
         if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
             // should not happen
