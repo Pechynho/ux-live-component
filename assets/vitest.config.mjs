@@ -1,4 +1,9 @@
-import { mergeConfig } from 'vitest/config';
-import configShared from '../../../vitest.config.base.mjs';
+import { defineConfig } from 'vitest/config';
 
-export default mergeConfig(configShared, {});
+export default defineConfig({
+    test: {
+        environment: 'jsdom',
+        include: ['test/**/*.test.ts'],
+        setupFiles: ['test/vitest.setup.ts'],
+    },
+});

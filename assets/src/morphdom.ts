@@ -207,6 +207,19 @@ export function executeMorphdom(
                 // same place as a <div id="bar">, we replace the content to get
                 // totally fresh internals.
                 if (fromEl.hasAttribute('data-skip-morph') || (fromEl.id && fromEl.id !== toEl.id)) {
+                    // [CUSTOM] Collect preserved elements inside this parent BEFORE
+                    // innerHTML wipe destroys the DOM subtree. This scopes the
+                    // restore loop to only elements that were actually inside the
+                    // affected parent, avoiding unnecessary DOM queries and
+                    // preventing edge cases where a preserved element from
+                    // elsewhere could be incorrectly moved.
+                    const preservedInsideParent: Array<[string, HTMLElement]> = [];
+                    originalElementsToPreserve.forEach((originalElement, id) => {
+                        if (!handledPreserveIds.has(id) && fromEl.contains(originalElement)) {
+                            preservedInsideParent.push([id, originalElement]);
+                        }
+                    });
+
                     fromEl.innerHTML = toEl.innerHTML;
 
                     // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
@@ -214,20 +227,16 @@ export function executeMorphdom(
                     // elements inside the swapped parent are silently replaced with
                     // freshly parsed nodes, losing all JS state. We search the NEW
                     // content for matching IDs and swap originals back in.
-                    originalElementsToPreserve.forEach((originalElement, id) => {
-                        if (handledPreserveIds.has(id)) {
-                            return;
-                        }
+                    for (const [id, originalElement] of preservedInsideParent) {
                         const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
                             handledPreserveIds.add(id);
-                            // [CUSTOM] Restored element is always a live component —
-                            // trigger re-render so it gets fresh server state.
-                            originalElement.dispatchEvent(new CustomEvent('live:preserve-restored'));
+                            // [CUSTOM] Trigger re-render so it gets fresh server state.
+                            originalElement.dispatchEvent(new CustomEvent('live:preserve-restored', { bubbles: false }));
                         }
-                    });
+                    }
 
                     return true;
                 }

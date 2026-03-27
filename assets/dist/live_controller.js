@@ -1212,19 +1212,22 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
           }
         }
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
-          fromEl.innerHTML = toEl.innerHTML;
+          const preservedInsideParent = [];
           originalElementsToPreserve.forEach((originalElement, id) => {
-            if (handledPreserveIds.has(id)) {
-              return;
+            if (!handledPreserveIds.has(id) && fromEl.contains(originalElement)) {
+              preservedInsideParent.push([id, originalElement]);
             }
+          });
+          fromEl.innerHTML = toEl.innerHTML;
+          for (const [id, originalElement] of preservedInsideParent) {
             const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
               handledPreserveIds.add(id);
-              originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
+              originalElement.dispatchEvent(new CustomEvent("live:preserve-restored", { bubbles: false }));
             }
-          });
+          }
           return true;
         }
         if (fromEl.parentElement?.hasAttribute("data-skip-morph")) {
@@ -2806,7 +2809,12 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
       // [CUSTOM] When this component's element is restored via innerHTML swap
       // in morphdom (data-live-preserve), re-render to get fresh server state.
       // queueMicrotask defers until after the current morphdom pass completes.
-      { event: "live:preserve-restored", callback: () => queueMicrotask(() => this.component.render()) }
+      // Guard with element.isConnected to prevent render on a disconnected component.
+      { event: "live:preserve-restored", callback: () => queueMicrotask(() => {
+        if (this.element.isConnected) {
+          this.component.render();
+        }
+      }) }
     ];
     this.pendingFiles = {};
   }
