@@ -1222,12 +1222,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
               handledPreserveIds.add(id);
-              originalElement.querySelectorAll('[data-controller~="live"]').forEach((childComponent) => {
-                childComponent.dispatchEvent(new CustomEvent("live:preserve-restored"));
-              });
-              if (originalElement.matches('[data-controller~="live"]')) {
-                originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
-              }
+              originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
             }
           });
           return true;

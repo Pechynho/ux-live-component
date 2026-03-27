@@ -223,16 +223,9 @@ export function executeMorphdom(
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
                             handledPreserveIds.add(id);
-                            // [CUSTOM] Notify live components inside the restored element
-                            // that they were restored via innerHTML swap and should
-                            // re-render to get fresh server state.
-                            originalElement.querySelectorAll<HTMLElement>('[data-controller~="live"]').forEach((childComponent) => {
-                                childComponent.dispatchEvent(new CustomEvent('live:preserve-restored'));
-                            });
-                            // Also check if the restored element itself is a live component
-                            if (originalElement.matches('[data-controller~="live"]')) {
-                                originalElement.dispatchEvent(new CustomEvent('live:preserve-restored'));
-                            }
+                            // [CUSTOM] Restored element is always a live component —
+                            // trigger re-render so it gets fresh server state.
+                            originalElement.dispatchEvent(new CustomEvent('live:preserve-restored'));
                         }
                     });
 
