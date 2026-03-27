@@ -96,8 +96,9 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
         { event: 'change', callback: (event) => this.handleChangeEvent(event) },
         // [CUSTOM] When this component's element is restored via innerHTML swap
         // in morphdom (data-live-preserve), re-render to get fresh server state.
-        // queueMicrotask defers until after the current morphdom pass completes.
-        { event: 'live:preserve-restored', callback: () => queueMicrotask(() => this.component.render()) },
+        // setTimeout defers until after Stimulus MutationObserver processes the
+        // disconnect/connect cycle caused by the temporary DOM removal.
+        { event: 'live:preserve-restored', callback: () => setTimeout(() => this.component.render(), 0) },
     ];
     private pendingFiles: { [key: string]: HTMLInputElement } = {};
 
