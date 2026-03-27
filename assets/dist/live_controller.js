@@ -1125,6 +1125,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
   const originalElementIdsToSwapAfter = [];
   const originalElementsToPreserve = /* @__PURE__ */ new Map();
   const handledPreserveIds = /* @__PURE__ */ new Set();
+  const elementsToNotifyPreserveRestored = [];
   const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
     const oldElement = originalElementsToPreserve.get(id);
     if (!(oldElement instanceof HTMLElement)) {
@@ -1222,7 +1223,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
               handledPreserveIds.add(id);
-              originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
+              elementsToNotifyPreserveRestored.push(originalElement);
             }
           });
           return true;
@@ -1254,6 +1255,9 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
       throw new Error("Missing elements.");
     }
     newElement.replaceWith(originalElement);
+  });
+  elementsToNotifyPreserveRestored.forEach((el) => {
+    el.dispatchEvent(new CustomEvent("live:preserve-restored"));
   });
 }
 
@@ -2374,12 +2378,28 @@ var ChildComponentPlugin_default = class {
       if (!child.id) {
         throw new Error("missing id");
       }
+      if (this.isChildBehindSkipMorph(child)) {
+        return;
+      }
       fingerprints[child.id] = {
         fingerprint: child.fingerprint,
         tag: child.element.tagName.toLowerCase()
       };
     });
     return fingerprints;
+  }
+  // [CUSTOM] Check if a child component is inside a data-skip-morph zone
+  // relative to this parent component. If so, innerHTML swap will destroy
+  // the child during morph, so we should not preserve it.
+  isChildBehindSkipMorph(child) {
+    let el = child.element;
+    while (el && el !== this.component.element) {
+      if (el.hasAttribute("data-skip-morph")) {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
   }
   /**
    * Notifies parent of a model change if desired.

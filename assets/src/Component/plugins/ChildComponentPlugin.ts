@@ -43,6 +43,13 @@ export default class implements PluginInterface {
                 throw new Error('missing id');
             }
 
+            // [CUSTOM] Skip children behind data-skip-morph — they will be
+            // inside an innerHTML swap zone, so the server should fully
+            // re-render them instead of emitting data-live-preserve.
+            if (this.isChildBehindSkipMorph(child)) {
+                return;
+            }
+
             fingerprints[child.id] = {
                 fingerprint: child.fingerprint as string,
                 tag: child.element.tagName.toLowerCase(),
@@ -50,6 +57,20 @@ export default class implements PluginInterface {
         });
 
         return fingerprints;
+    }
+
+    // [CUSTOM] Check if a child component is inside a data-skip-morph zone
+    // relative to this parent component. If so, innerHTML swap will destroy
+    // the child during morph, so we should not preserve it.
+    private isChildBehindSkipMorph(child: Component): boolean {
+        let el: HTMLElement | null = child.element;
+        while (el && el !== this.component.element) {
+            if (el.hasAttribute('data-skip-morph')) {
+                return true;
+            }
+            el = el.parentElement;
+        }
+        return false;
     }
 
     /**

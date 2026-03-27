@@ -44,6 +44,9 @@ export function executeMorphdom(
     // Idiomorph match, clone+swap, removal, or innerHTML restore)
     // so the innerHTML restore loop can skip them.
     const handledPreserveIds = new Set<string>();
+    // [CUSTOM] Collect elements restored via innerHTML swap to dispatch
+    // live:preserve-restored events after morph completes.
+    const elementsToNotifyPreserveRestored: HTMLElement[] = [];
 
     /**
      * Called when a preserved element is about to be morphed.
@@ -223,9 +226,7 @@ export function executeMorphdom(
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
                             handledPreserveIds.add(id);
-                            // [CUSTOM] Restored element is always a live component —
-                            // trigger re-render so it gets fresh server state.
-                            originalElement.dispatchEvent(new CustomEvent('live:preserve-restored'));
+                            elementsToNotifyPreserveRestored.push(originalElement); // [CUSTOM]
                         }
                     });
 
@@ -276,5 +277,11 @@ export function executeMorphdom(
             throw new Error('Missing elements.');
         }
         newElement.replaceWith(originalElement);
+    });
+
+    // [CUSTOM] Dispatch preserve-restored events after morph is complete,
+    // so event handlers don't interfere with ongoing morphdom processing.
+    elementsToNotifyPreserveRestored.forEach((el) => {
+        el.dispatchEvent(new CustomEvent('live:preserve-restored'));
     });
 }
