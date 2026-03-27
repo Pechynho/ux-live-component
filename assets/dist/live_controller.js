@@ -1222,6 +1222,12 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
               handledPreserveIds.add(id);
+              originalElement.querySelectorAll('[data-controller~="live"]').forEach((childComponent) => {
+                childComponent.dispatchEvent(new CustomEvent("live:preserve-restored"));
+              });
+              if (originalElement.matches('[data-controller~="live"]')) {
+                originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
+              }
             }
           });
           return true;
@@ -2801,7 +2807,11 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
     this.pendingActionTriggerModelElement = null;
     this.elementEventListeners = [
       { event: "input", callback: (event) => this.handleInputEvent(event) },
-      { event: "change", callback: (event) => this.handleChangeEvent(event) }
+      { event: "change", callback: (event) => this.handleChangeEvent(event) },
+      // [CUSTOM] When this component's element is restored via innerHTML swap
+      // in morphdom (data-live-preserve), re-render to get fresh server state.
+      // queueMicrotask defers until after the current morphdom pass completes.
+      { event: "live:preserve-restored", callback: () => queueMicrotask(() => this.component.render()) }
     ];
     this.pendingFiles = {};
   }
