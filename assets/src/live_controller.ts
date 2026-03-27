@@ -94,6 +94,11 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     private elementEventListeners: Array<{ event: string; callback: (event: any) => void }> = [
         { event: 'input', callback: (event) => this.handleInputEvent(event) },
         { event: 'change', callback: (event) => this.handleChangeEvent(event) },
+        // [CUSTOM] When this component's element is restored via innerHTML swap
+        // in morphdom (data-live-preserve), re-render to get fresh server state.
+        // setTimeout defers until after Stimulus MutationObserver processes the
+        // disconnect/connect cycle caused by the temporary DOM removal.
+        { event: 'live:preserve-restored', callback: () => setTimeout(() => this.component.render(), 0) },
     ];
     private pendingFiles: { [key: string]: HTMLInputElement } = {};
 

@@ -40,6 +40,10 @@ export function executeMorphdom(
      */
     const originalElementIdsToSwapAfter: Array<string> = [];
     const originalElementsToPreserve = new Map<string, HTMLElement>();
+    // [CUSTOM] Track preserved elements already handled (by any path:
+    // Idiomorph match, clone+swap, removal, or innerHTML restore)
+    // so the innerHTML restore loop can skip them.
+    const handledPreserveIds = new Set<string>();
 
     /**
      * Called when a preserved element is about to be morphed.
@@ -56,6 +60,7 @@ export function executeMorphdom(
         }
 
         originalElementIdsToSwapAfter.push(id);
+        handledPreserveIds.add(id); // [CUSTOM]
         if (!replaceWithClone) {
             return null;
         }
@@ -73,7 +78,7 @@ export function executeMorphdom(
             throw new Error('The data-live-preserve attribute requires an id attribute to be set on the element');
         }
 
-        const oldElement = rootFromElement.querySelector(`#${id}`);
+        const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
         if (!(oldElement instanceof HTMLElement)) {
             throw new Error(`The element with id "${id}" was not found in the original HTML`);
         }
@@ -99,6 +104,7 @@ export function executeMorphdom(
                     if (fromEl.id === toEl.id) {
                         // the preserved elements match, prevent morph and
                         // keep the original element
+                        handledPreserveIds.add(fromEl.id); // [CUSTOM]
                         return false;
                     }
 
@@ -204,14 +210,22 @@ export function executeMorphdom(
                     fromEl.innerHTML = toEl.innerHTML;
 
                     // [CUSTOM] Restore preserved elements destroyed by innerHTML swap.
-                    // innerHTML is a native DOM operation that bypasses Idiomorph callbacks,
-                    // so data-live-preserve elements inside the swapped parent would be
-                    // silently replaced with freshly parsed nodes, losing all JS state.
+                    // innerHTML bypasses Idiomorph callbacks, so data-live-preserve
+                    // elements inside the swapped parent are silently replaced with
+                    // freshly parsed nodes, losing all JS state. We search the NEW
+                    // content for matching IDs and swap originals back in.
                     originalElementsToPreserve.forEach((originalElement, id) => {
-                        const placeholder = fromEl.querySelector(`#${id}`);
+                        if (handledPreserveIds.has(id)) {
+                            return;
+                        }
+                        const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
                         if (placeholder) {
                             syncAttributes(placeholder, originalElement);
                             placeholder.replaceWith(originalElement);
+                            handledPreserveIds.add(id);
+                            // [CUSTOM] Restored element is always a live component —
+                            // trigger re-render so it gets fresh server state.
+                            originalElement.dispatchEvent(new CustomEvent('live:preserve-restored'));
                         }
                     });
 
@@ -255,7 +269,7 @@ export function executeMorphdom(
     });
 
     originalElementIdsToSwapAfter.forEach((id: string) => {
-        const newElement = rootFromElement.querySelector(`#${id}`);
+        const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
         const originalElement = originalElementsToPreserve.get(id);
         if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
             // should not happen

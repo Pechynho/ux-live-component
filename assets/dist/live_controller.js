@@ -1124,12 +1124,14 @@ var syncAttributes = (fromEl, toEl) => {
 function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, getElementValue, externalMutationTracker) {
   const originalElementIdsToSwapAfter = [];
   const originalElementsToPreserve = /* @__PURE__ */ new Map();
+  const handledPreserveIds = /* @__PURE__ */ new Set();
   const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
     const oldElement = originalElementsToPreserve.get(id);
     if (!(oldElement instanceof HTMLElement)) {
       throw new Error(`Original element with id ${id} not found`);
     }
     originalElementIdsToSwapAfter.push(id);
+    handledPreserveIds.add(id);
     if (!replaceWithClone) {
       return null;
     }
@@ -1142,7 +1144,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
     if (!id) {
       throw new Error("The data-live-preserve attribute requires an id attribute to be set on the element");
     }
-    const oldElement = rootFromElement.querySelector(`#${id}`);
+    const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
     if (!(oldElement instanceof HTMLElement)) {
       throw new Error(`The element with id "${id}" was not found in the original HTML`);
     }
@@ -1161,6 +1163,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
         }
         if (fromEl.id && originalElementsToPreserve.has(fromEl.id)) {
           if (fromEl.id === toEl.id) {
+            handledPreserveIds.add(fromEl.id);
             return false;
           }
           const clonedFromEl = markElementAsNeedingPostMorphSwap(fromEl.id, true);
@@ -1211,10 +1214,15 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
         if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
           fromEl.innerHTML = toEl.innerHTML;
           originalElementsToPreserve.forEach((originalElement, id) => {
-            const placeholder = fromEl.querySelector(`#${id}`);
+            if (handledPreserveIds.has(id)) {
+              return;
+            }
+            const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
             if (placeholder) {
               syncAttributes(placeholder, originalElement);
               placeholder.replaceWith(originalElement);
+              handledPreserveIds.add(id);
+              originalElement.dispatchEvent(new CustomEvent("live:preserve-restored"));
             }
           });
           return true;
@@ -1240,7 +1248,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
     }
   });
   originalElementIdsToSwapAfter.forEach((id) => {
-    const newElement = rootFromElement.querySelector(`#${id}`);
+    const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
     const originalElement = originalElementsToPreserve.get(id);
     if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
       throw new Error("Missing elements.");
@@ -2794,7 +2802,12 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
     this.pendingActionTriggerModelElement = null;
     this.elementEventListeners = [
       { event: "input", callback: (event) => this.handleInputEvent(event) },
-      { event: "change", callback: (event) => this.handleChangeEvent(event) }
+      { event: "change", callback: (event) => this.handleChangeEvent(event) },
+      // [CUSTOM] When this component's element is restored via innerHTML swap
+      // in morphdom (data-live-preserve), re-render to get fresh server state.
+      // setTimeout defers until after Stimulus MutationObserver processes the
+      // disconnect/connect cycle caused by the temporary DOM removal.
+      { event: "live:preserve-restored", callback: () => setTimeout(() => this.component.render(), 0) }
     ];
     this.pendingFiles = {};
   }
