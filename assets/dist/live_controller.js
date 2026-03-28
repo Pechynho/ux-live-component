@@ -2836,6 +2836,11 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
     this.createComponent();
   }
   connect() {
+    const currentProps = this.propsValue;
+    const storedProps = this.component.valueStore.getOriginalProps();
+    if (JSON.stringify(currentProps) !== JSON.stringify(storedProps)) {
+      this.createComponent();
+    }
     this.connectComponent();
     this.mutationObserver.observe(this.element, {
       attributes: true
