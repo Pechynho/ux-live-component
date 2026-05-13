@@ -161,6 +161,7 @@ final class Kernel extends BaseKernel
                 'url' => '%env(resolve:DATABASE_URL)%',
             ],
             'orm' => [
+                'validate_xml_mapping' => true,
                 'auto_mapping' => true,
                 'mappings' => [
                     'Default' => [
@@ -190,27 +191,13 @@ final class Kernel extends BaseKernel
                 }
 
                 // https://github.com/doctrine/DoctrineBundle/pull/1661
+                // https://github.com/doctrine/DoctrineBundle/pull/1962
                 if (version_compare($doctrineBundleVersion, '2.9.0', '>=')) {
                     $doctrineConfig['orm']['report_fields_where_declared'] = true;
                 }
-
-                if (version_compare($doctrineBundleVersion, '2.12.0', '>=')) {
-                    $doctrineConfig['orm']['controller_resolver']['auto_mapping'] = false;
-                }
             }
 
-            // https://github.com/doctrine/DoctrineBundle/pull/1661
-            if (version_compare($doctrineBundleVersion, '2.9.0', '>=')) {
-                $doctrineConfig['orm']['validate_xml_mapping'] = true;
-                $doctrineConfig['dbal']['schema_manager_factory'] = 'doctrine.dbal.default_schema_manager_factory';
-
-                // https://github.com/doctrine/DoctrineBundle/pull/1962
-                if (version_compare($doctrineBundleVersion, '3.0.0', '<')) {
-                    $doctrineConfig['orm']['report_fields_where_declared'] = true;
-                }
-            }
-
-            if (\PHP_VERSION_ID >= 80400 && version_compare($doctrineBundleVersion, '2.15.0', '>=') && version_compare($doctrineBundleVersion, '4.0.0', '<')) {
+            if (version_compare($doctrineBundleVersion, '2.15.0', '>=') && version_compare($doctrineBundleVersion, '4.0.0', '<')) {
                 $doctrineConfig['orm']['enable_native_lazy_objects'] = true;
             }
         }

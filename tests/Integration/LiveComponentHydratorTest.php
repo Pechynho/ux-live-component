@@ -13,6 +13,8 @@
 
 namespace Symfony\UX\LiveComponent\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Uid\Ulid;
@@ -155,11 +157,8 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertEquals($componentAfterHydration, $hydratedComponent2, 'After another round of (de)hydration, things still match');
     }
 
-    /**
-     * @group transient-on-windows
-     *
-     * @dataProvider provideDehydrationHydrationTests
-     */
+    #[Group('transient-on-windows')]
+    #[DataProvider('provideDehydrationHydrationTests')]
     public function testCanDehydrateAndHydrateComponentWithTestCases(callable $testFactory, ?int $minPhpVersion = null)
     {
         $this->executeHydrationTestCase($testFactory, $minPhpVersion);
@@ -1639,9 +1638,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->hydrator()->dehydrate($component, $this->createComponentAttributes(), $this->createLiveMetadata($component));
     }
 
-    /**
-     * @dataProvider provideInvalidHydrationTests
-     */
+    #[DataProvider('provideInvalidHydrationTests')]
     public function testInvalidTypeHydration(callable $testFactory, ?int $minPhpVersion = null)
     {
         $this->executeHydrationTestCase($testFactory, $minPhpVersion);
@@ -1900,9 +1897,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertSame([], $actualAttributes->all());
     }
 
-    /**
-     * @dataProvider truthyValueProvider
-     */
+    #[DataProvider('truthyValueProvider')]
     public function testCoerceTruthyValuesForScalarTypes($prop, $value, $expected)
     {
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('scalar_types'))->getProps();
@@ -1914,9 +1909,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertSame($expected, $hydratedComponent->$prop);
     }
 
-    /**
-     * @dataProvider falseyValueProvider
-     */
+    #[DataProvider('falseyValueProvider')]
     public function testCoerceFalseyValuesForScalarTypes($prop, $value, $expected)
     {
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('scalar_types'))->getProps();
