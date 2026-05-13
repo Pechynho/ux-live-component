@@ -28,7 +28,7 @@ jobs:
       - name: Check for new upstream commits
         id: check
         run: |
-          if git merge-base --is-ancestor upstream/2.x HEAD; then
+          if git merge-base --is-ancestor upstream/3.x HEAD; then
             echo "up_to_date=true" >> "$GITHUB_OUTPUT"
             echo "No new upstream commits, nothing to do."
           else
@@ -45,7 +45,7 @@ jobs:
         if: steps.check.outputs.up_to_date != 'true'
         id: merge
         run: |
-          if git merge upstream/2.x --no-edit; then
+          if git merge upstream/3.x --no-edit; then
             echo "status=clean" >> "$GITHUB_OUTPUT"
           else
             # Check which files are conflicted
@@ -119,7 +119,7 @@ jobs:
 
       - name: Push
         if: steps.merge.outputs.status == 'clean' || steps.merge.outputs.status == 'auto_resolved'
-        run: git push origin 2.x
+        run: git push origin 3.x
 
       - name: Create PR on source conflict
         if: steps.merge.outputs.status == 'source_conflict'
@@ -130,20 +130,20 @@ jobs:
           BRANCH="upstream-sync"
 
           git merge --abort
-          # Reset stable branch to current 2.x, then attempt merge
+          # Reset stable branch to current 3.x, then attempt merge
           git checkout -B "$BRANCH"
-          git merge upstream/2.x --no-commit --no-ff || true
+          git merge upstream/3.x --no-commit --no-ff || true
 
           # Remove unwanted upstream .github files
           find .github -type f ! -path '.github/workflows/sync-upstream.yml' -delete 2>/dev/null || true
           find .github -type d -empty -delete 2>/dev/null || true
 
           git add -A
-          git commit -m "chore: merge upstream 2.x (source conflicts need manual resolution)"
+          git commit -m "chore: merge upstream 3.x (source conflicts need manual resolution)"
           git push --force origin "$BRANCH"
 
           # Skip PR creation if one is already open for this branch
-          EXISTING_PR=$(gh pr list --head "$BRANCH" --base 2.x --state open --json url --jq '.[0].url')
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --base 3.x --state open --json url --jq '.[0].url')
           if [ -n "$EXISTING_PR" ]; then
             echo "::notice::Existing PR updated: $EXISTING_PR"
             exit 0
@@ -155,7 +155,7 @@ jobs:
           if ! gh pr create \
             --title "Upstream sync — source conflicts" \
             --body "$(cat <<'EOF'
-          Automatic merge from `symfony/ux-live-component:2.x` failed due to conflicts in source files.
+          Automatic merge from `symfony/ux-live-component:3.x` failed due to conflicts in source files.
 
           Conflicts in `assets/dist/` and `.github/` are auto-resolved by the workflow.
           Source file conflicts need manual resolution.
@@ -167,10 +167,10 @@ jobs:
           to rebuild `assets/dist/`.
           EOF
           )" \
-            --base 2.x \
+            --base 3.x \
             --head "$BRANCH" 2> pr_error.log
           then
             cat pr_error.log
             echo "::warning::Could not create PR automatically. Enable 'Allow GitHub Actions to create and approve pull requests' in Settings → Actions → General → Workflow permissions, or open the PR manually:"
-            echo "::warning::https://github.com/$REPO/compare/2.x...$BRANCH?expand=1"
+            echo "::warning::https://github.com/$REPO/compare/3.x...$BRANCH?expand=1"
           fi

@@ -2475,9 +2475,9 @@ var LoadingPlugin_default = class {
   }
   handleLoadingToggle(component, isLoading, targetElement, backendRequest) {
     if (isLoading) {
-      this.addAttributes(targetElement, ["busy"]);
+      targetElement.setAttribute("aria-busy", "true");
     } else {
-      this.removeAttributes(targetElement, ["busy"]);
+      targetElement.removeAttribute("aria-busy");
     }
     this.getLoadingDirectives(component, targetElement).forEach(({ element, directives }) => {
       if (isLoading) {

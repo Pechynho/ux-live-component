@@ -2,10 +2,12 @@
 
 Fork repozitáře `symfony/ux-live-component` (read-only subtree split z `symfony/ux` monorepa).
 
-**Upstream:** `symfony/ux-live-component` branch `2.x`
-**Origin:** `Pechynho/ux-live-component` branch `2.x`
+**Upstream:** `symfony/ux-live-component` branch `3.x`
+**Origin:** `Pechynho/ux-live-component` branch `3.x`
 **Upstream sync:** `.github/workflows/sync-upstream.yml` — GitHub Actions workflow, denně v 06:00 UTC merguje commity z upstreamu. Při konfliktu vytvoří PR.
-**Composer:** `"symfony/ux-live-component": "dev-2.x"` — vždy poslední stav forku.
+**Composer:** `"symfony/ux-live-component": "dev-3.x"` — vždy poslední stav forku.
+
+**Symfony UX 3.x:** vyžaduje PHP 8.4 a Symfony 7.4.
 
 ## Účel forku
 
@@ -106,12 +108,12 @@ Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř po
 **Soubor:** `.github/workflows/sync-upstream.yml`
 
 GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručně):
-- Stáhne commity z `symfony/ux-live-component:2.x` a provede merge
+- Stáhne commity z `symfony/ux-live-component:3.x` a provede merge
 - Konflikty v `assets/dist/` a `.github/` se řeší automaticky (dist se přebuildí, upstream .github soubory se smažou)
 - Po merge automaticky spustí `yarn install && yarn build` a commitne nový dist
 - Pokud merge selže kvůli konfliktu ve **zdrojových souborech** (`.ts`, `.php`, …), vytvoří PR k manuálnímu řešení
 - Nesynkuje upstream tagy (obsahují workflow soubory, které `GITHUB_TOKEN` nemůže pushovat)
-- Fork nepoužívá vlastní tagy — v composeru se odkazuje přes `dev-2.x`
+- Fork nepoužívá vlastní tagy — v composeru se odkazuje přes `dev-3.x`
 
 ## Build
 
