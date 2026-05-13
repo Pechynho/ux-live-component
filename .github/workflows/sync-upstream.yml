@@ -123,9 +123,15 @@ jobs:
 
       - name: Create PR on source conflict
         if: steps.merge.outputs.status == 'source_conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
+          BRANCH="upstream-sync"
+
           git merge --abort
-          git checkout -b upstream-sync/${{ github.run_id }}
+          # Reset stable branch to current 2.x, then attempt merge
+          git checkout -B "$BRANCH"
           git merge upstream/2.x --no-commit --no-ff || true
 
           # Remove unwanted upstream .github files
@@ -134,8 +140,19 @@ jobs:
 
           git add -A
           git commit -m "chore: merge upstream 2.x (source conflicts need manual resolution)"
-          git push origin upstream-sync/${{ github.run_id }}
-          gh pr create \
+          git push --force origin "$BRANCH"
+
+          # Skip PR creation if one is already open for this branch
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --base 2.x --state open --json url --jq '.[0].url')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "::notice::Existing PR updated: $EXISTING_PR"
+            exit 0
+          fi
+
+          # Try to create PR; fall back to a notice with manual-create URL if the
+          # GITHUB_TOKEN cannot create PRs (repo setting "Allow GitHub Actions to
+          # create and approve pull requests" disabled).
+          if ! gh pr create \
             --title "Upstream sync — source conflicts" \
             --body "$(cat <<'EOF'
           Automatic merge from `symfony/ux-live-component:2.x` failed due to conflicts in source files.
@@ -151,6 +168,9 @@ jobs:
           EOF
           )" \
             --base 2.x \
-            --head upstream-sync/${{ github.run_id }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            --head "$BRANCH" 2> pr_error.log
+          then
+            cat pr_error.log
+            echo "::warning::Could not create PR automatically. Enable 'Allow GitHub Actions to create and approve pull requests' in Settings → Actions → General → Workflow permissions, or open the PR manually:"
+            echo "::warning::https://github.com/$REPO/compare/2.x...$BRANCH?expand=1"
+          fi
