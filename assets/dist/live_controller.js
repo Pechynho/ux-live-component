@@ -1846,6 +1846,7 @@ var ValueStore_default = class {
 };
 
 // src/Component/index.ts
+var MAX_ACTIONS_PER_BATCH = 50;
 var Component = class {
   /**
    * @param element The root element
@@ -2028,9 +2029,11 @@ var Component = class {
         filesToSend[key] = value.files;
       }
     }
+    const actionsToSend = this.pendingActions.slice(0, MAX_ACTIONS_PER_BATCH);
+    const remainingActions = this.pendingActions.slice(MAX_ACTIONS_PER_BATCH);
     const requestConfig = {
       props: this.valueStore.getOriginalProps(),
-      actions: this.pendingActions,
+      actions: actionsToSend,
       updated: this.valueStore.getDirtyProps(),
       children: {},
       updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
@@ -2050,9 +2053,9 @@ var Component = class {
       requestConfig.files
     );
     this.hooks.triggerHook("loading.state:started", this.element, this.backendRequest);
-    this.pendingActions = [];
+    this.pendingActions = remainingActions;
     this.valueStore.flushDirtyPropsToPending();
-    this.isRequestPending = false;
+    this.isRequestPending = remainingActions.length > 0;
     this.backendRequest.promise.then(async (response) => {
       const backendResponse = new BackendResponse_default(response);
       const html = await backendResponse.getBody();
