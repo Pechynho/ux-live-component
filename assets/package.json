@@ -22,7 +22,7 @@
     "scripts": {
         "build": "tsup && mv dist/live.css dist/live.min.css",
         "test": "pnpm run test:unit && pnpm run test:browser",
-        "test:unit": "../../../bin/unit_test_package.sh .",
+        "test:unit": "vitest --run",
         "test:browser": "playwright test",
         "test:browser:ui": "playwright test --ui"
     },
