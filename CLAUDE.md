@@ -103,7 +103,22 @@ Oprava bugu, kdy elementy s `data-live-preserve` ztratily svůj DOM stav (event 
 
 Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem.
 
-### 7. Upstream sync (GitHub Actions)
+### 7. Fix LiveUrl `history.replaceState` po navigaci (race)
+
+**Soubory:** `assets/src/Component/index.ts` (metoda `performRequest()` + module-level `navigationEpoch`), test `assets/test/unit/controller/live-url-navigation.test.ts`
+
+Oprava race condition: pokud live response (hlavička `X-Live-Url`) doletěla během navigace nebo po ní (Turbo visit, history back/forward), bezpodmínečný `history.replaceState` přepsal URL history entry **cílové** stránky na URL stránky původní.
+
+Invariant: LiveUrl update je platný jen tehdy, když history entry v momentě response je tatáž jako v momentě odeslání requestu. Implementace:
+- Module-level čítač `navigationEpoch` inkrementovaný na eventy `popstate` a `turbo:visit` (listenery na `window`; Turbo se neimportuje — v aplikaci bez Turba event nikdy nevystřelí a chování se nemění).
+- `performRequest()` si při odeslání zapamatuje aktuální epochu; pokud se při response liší, `history.replaceState` se přeskočí.
+- Navíc se přeskočí i při `this.element.isConnected === false` (stale response po výměně DOM, kterou eventy nepokryjí).
+
+Když guard nepustí, přeskočí se POUZE `history.replaceState` — zbytek zpracování response (re-render, resolve promise) běží beze změny.
+
+Pozor: guard záměrně **neporovnává pathname/URL** — legitimní LiveUrl může měnit i pathname (`UrlMapping(mapPath: true)`) a sibling komponenta může změnit pathname přes vlastní LiveUrl update, zatímco jiná komponenta má request in-flight.
+
+### 8. Upstream sync (GitHub Actions)
 
 **Soubor:** `.github/workflows/sync-upstream.yml`
 
@@ -122,6 +137,8 @@ Upstream buildí assets v monorepu `symfony/ux` přes `bin/build_package.ts`. Ta
 **Soubory:**
 - `assets/tsup.config.mjs` — konfigurace tsup bundleru
 - `assets/tsconfig.json` — standalone tsconfig (upstream odkazoval na monorepo)
+- `assets/vitest.config.mjs` — standalone vitest config (upstream mergoval base config z monorepa)
+- `assets/test/setup.js` — kopie monorepo `test/setup.js` (jest-dom matchery)
 - `Makefile` — make targety
 
 **Příkazy:**
@@ -130,13 +147,17 @@ Upstream buildí assets v monorepu `symfony/ux` přes `bin/build_package.ts`. Ta
 # Přes Makefile (z rootu)
 make assets-install   # yarn install
 make assets-build     # yarn install + yarn build
+make assets-test      # yarn install + unit testy (vitest)
 make assets-clean     # smaže node_modules a dist
 
 # Přímo (z assets/)
 cd assets
 yarn install
 yarn build
+yarn test:unit        # unit testy (vitest --run)
 ```
+
+Browser testy (`test:browser`, Playwright) standalone nefungují — vyžadují setup z monorepa.
 
 **Výstup** (`assets/dist/`):
 - `live_controller.js` — bundlovaný ESM, external `@hotwired/stimulus`

@@ -17,6 +17,20 @@ declare const Turbo: any;
 // Must match BatchActionController::MAX_ACTIONS_PER_BATCH on the PHP side.
 export const MAX_ACTIONS_PER_BATCH = 50;
 
+// [CUSTOM] Counts navigations (history back/forward, Turbo visits). A LiveUrl
+// from a response is only applied when the history entry is still the one the
+// request was sent from, i.e. the epoch did not change while the request was
+// in flight. Turbo is detected through its bubbling DOM event, without
+// importing it: in applications without Turbo the event simply never fires.
+let navigationEpoch = 0;
+if (typeof window !== 'undefined') {
+    const bumpNavigationEpoch = () => {
+        navigationEpoch++;
+    };
+    window.addEventListener('popstate', bumpNavigationEpoch);
+    window.addEventListener('turbo:visit', bumpNavigationEpoch);
+}
+
 type MaybePromise<T = void> = T | Promise<T>;
 
 export type ComponentHooks = {
@@ -336,6 +350,10 @@ export default class Component {
             return;
         }
 
+        // [CUSTOM] Snapshot the navigation epoch so a late response can detect
+        // that the user navigated away while the request was in flight.
+        const requestNavigationEpoch = navigationEpoch;
+
         this.backendRequest = this.backend.makeRequest(
             requestConfig.props,
             requestConfig.actions,
@@ -386,7 +404,12 @@ export default class Component {
             }
 
             const liveUrl = backendResponse.getLiveUrl();
-            if (liveUrl) {
+            // [CUSTOM] A response arriving during or after a navigation must not
+            // rewrite the new history entry: apply the LiveUrl only if the
+            // component is still in the document and no navigation happened since
+            // the request was sent. Only the history update is skipped — the
+            // response is still processed.
+            if (liveUrl && this.element.isConnected && navigationEpoch === requestNavigationEpoch) {
                 history.replaceState(
                     history.state,
                     '',

@@ -1847,6 +1847,14 @@ var ValueStore_default = class {
 
 // src/Component/index.ts
 var MAX_ACTIONS_PER_BATCH = 50;
+var navigationEpoch = 0;
+if (typeof window !== "undefined") {
+  const bumpNavigationEpoch = () => {
+    navigationEpoch++;
+  };
+  window.addEventListener("popstate", bumpNavigationEpoch);
+  window.addEventListener("turbo:visit", bumpNavigationEpoch);
+}
 var Component = class {
   /**
    * @param element The root element
@@ -2044,6 +2052,7 @@ var Component = class {
     if (requestControls.abortRequest) {
       return;
     }
+    const requestNavigationEpoch = navigationEpoch;
     this.backendRequest = this.backend.makeRequest(
       requestConfig.props,
       requestConfig.actions,
@@ -2078,7 +2087,7 @@ var Component = class {
         return response;
       }
       const liveUrl = backendResponse.getLiveUrl();
-      if (liveUrl) {
+      if (liveUrl && this.element.isConnected && navigationEpoch === requestNavigationEpoch) {
         history.replaceState(
           history.state,
           "",
