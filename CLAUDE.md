@@ -6,6 +6,7 @@ Fork repozitáře `symfony/ux-live-component` (read-only subtree split z `symfon
 **Origin:** `Pechynho/ux-live-component` branch `3.x`
 **Upstream sync:** `.github/workflows/sync-upstream.yml` — GitHub Actions workflow, denně v 06:00 UTC merguje commity z upstreamu. Při konfliktu vytvoří PR.
 **Composer:** `"symfony/ux-live-component": "dev-3.x"` — vždy poslední stav forku.
+**Changelog forku:** `CHANGELOG-FORK.md` (upstream změny zůstávají v `CHANGELOG.md`). Při release bumpni patch verzi v `assets/package.json` (`x.y.z-pechynho`) a doplň entry.
 
 **Symfony UX 3.x:** vyžaduje PHP 8.4 a Symfony 7.4.
 
