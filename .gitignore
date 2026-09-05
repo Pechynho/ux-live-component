@@ -6,4 +6,8 @@
 /.phpunit.cache
 
 /var
+<<<<<<< HEAD
 /.idea
+=======
+/config/reference.php
+>>>>>>> upstream/3.x

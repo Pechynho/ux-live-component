@@ -21,7 +21,11 @@ class LiveComponentSubscriberTest extends TestCase
 {
     public function testDefaultConstructedSubscriberRejectsRequestWithoutAcceptHeader()
     {
+<<<<<<< HEAD
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class));
+=======
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class));
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
@@ -34,18 +38,30 @@ class LiveComponentSubscriberTest extends TestCase
 
     public function testDefaultConstructedSubscriberAcceptsRequestWithProperAcceptHeader()
     {
+<<<<<<< HEAD
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class));
+=======
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class));
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
         $request->headers->set('Accept', 'application/vnd.live-component+html');
+<<<<<<< HEAD
+=======
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+>>>>>>> upstream/3.x
 
         $this->assertTrue($this->callIsLiveComponentRequest($subscriber, $request));
     }
 
     public function testTestModeBypassesAcceptHeaderCheck()
     {
+<<<<<<< HEAD
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), true);
+=======
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), true);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
@@ -64,9 +80,15 @@ class LiveComponentSubscriberTest extends TestCase
     }
 
     #[DataProvider('provideProductionGateScenarios')]
+<<<<<<< HEAD
     public function testProductionGateRequiresNonSafelistedHeader(array $headers, bool $expected): void
     {
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), testMode: false);
+=======
+    public function testProductionGateRequiresNonSafelistedHeader(array $headers, bool $expected)
+    {
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), testMode: false);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some-component');
@@ -108,9 +130,15 @@ class LiveComponentSubscriberTest extends TestCase
         ];
     }
 
+<<<<<<< HEAD
     public function testRequestWithoutLiveComponentAttributeIsRejected(): void
     {
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), testMode: false);
+=======
+    public function testRequestWithoutLiveComponentAttributeIsRejected()
+    {
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), testMode: false);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->headers->set('Accept', 'application/vnd.live-component+html');

@@ -15,6 +15,10 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+<<<<<<< HEAD
+=======
+use Symfony\UX\LiveComponent\LiveResponse;
+>>>>>>> upstream/3.x
 use Symfony\UX\TwigComponent\MountedComponent;
 
 /**
@@ -33,12 +37,23 @@ final class BatchActionController
     {
     }
 
+<<<<<<< HEAD
     public function __invoke(Request $request, MountedComponent $_mounted_component, string $serviceId, array $actions): ?Response
+=======
+    public function __invoke(Request $request, MountedComponent $_mounted_component, string $serviceId, array $actions): Response|LiveResponse|null
+>>>>>>> upstream/3.x
     {
         if (\count($actions) > self::MAX_ACTIONS_PER_BATCH) {
             throw new BadRequestHttpException('Too many actions in batch.');
         }
 
+<<<<<<< HEAD
+=======
+        // sub-requests are not rendered, so a directive returned by one of them has to be
+        // carried up to the final render. The last one wins.
+        $liveResponse = null;
+
+>>>>>>> upstream/3.x
         foreach ($actions as $action) {
             $name = $action['name'] ?? throw new BadRequestHttpException('Invalid JSON.');
 
@@ -51,11 +66,22 @@ final class BatchActionController
 
             $response = $this->kernel->handle($subRequest, HttpKernelInterface::SUB_REQUEST, false);
 
+<<<<<<< HEAD
+=======
+            if ($subRequest->attributes->has('_live_response')) {
+                $liveResponse = $subRequest->attributes->get('_live_response');
+            }
+
+>>>>>>> upstream/3.x
             if ($response->isRedirection()) {
                 return $response;
             }
         }
 
+<<<<<<< HEAD
         return null;
+=======
+        return $liveResponse;
+>>>>>>> upstream/3.x
     }
 }

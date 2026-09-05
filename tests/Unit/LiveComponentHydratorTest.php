@@ -33,11 +33,19 @@ final class LiveComponentHydratorTest extends TestCase
 
         new LiveComponentHydrator(
             [],
+<<<<<<< HEAD
             $this->createMock(PropertyAccessorInterface::class),
             $this->createMock(LiveComponentMetadataFactory::class),
             $this->createMock(NormalizerInterface::class),
             '',
             $this->createMock(Environment::class),
+=======
+            $this->createStub(PropertyAccessorInterface::class),
+            $this->createStub(LiveComponentMetadataFactory::class),
+            $this->createStub(NormalizerInterface::class),
+            '',
+            $this->createStub(Environment::class),
+>>>>>>> upstream/3.x
         );
     }
 
@@ -47,11 +55,19 @@ final class LiveComponentHydratorTest extends TestCase
         if (!class_exists(Type::class)) {
             $hydrator = new LiveComponentHydrator(
                 [],
+<<<<<<< HEAD
                 $this->createMock(PropertyAccessorInterface::class),
                 $this->createMock(LiveComponentMetadataFactory::class),
                 new Serializer(normalizers: [new ObjectNormalizer()]),
                 'foo',
                 $this->createMock(Environment::class),
+=======
+                $this->createStub(PropertyAccessorInterface::class),
+                $this->createStub(LiveComponentMetadataFactory::class),
+                new Serializer(normalizers: [new ObjectNormalizer()]),
+                'foo',
+                $this->createStub(Environment::class),
+>>>>>>> upstream/3.x
             );
 
             $hydratedValue = $hydrator->hydrateValue(
@@ -64,11 +80,19 @@ final class LiveComponentHydratorTest extends TestCase
         } else {
             $hydrator = new LiveComponentHydrator(
                 [],
+<<<<<<< HEAD
                 $this->createMock(PropertyAccessorInterface::class),
                 $this->createMock(LiveComponentMetadataFactory::class),
                 new Serializer(normalizers: [new ObjectNormalizer()]),
                 'foo',
                 $this->createMock(Environment::class),
+=======
+                $this->createStub(PropertyAccessorInterface::class),
+                $this->createStub(LiveComponentMetadataFactory::class),
+                new Serializer(normalizers: [new ObjectNormalizer()]),
+                'foo',
+                $this->createStub(Environment::class),
+>>>>>>> upstream/3.x
             );
 
             $hydratedValue = $hydrator->hydrateValue(

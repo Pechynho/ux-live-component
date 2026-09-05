@@ -863,6 +863,24 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+<<<<<<< HEAD
+=======
+        yield 'Enum: a non-scalar updated value is ignored gracefully (not a 500)' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public IntEnum $int = IntEnum::HIGH;
+            })
+                ->mountWith(['int' => IntEnum::HIGH])
+                // a tampered payload sending an array instead of a scalar used to trigger
+                // a TypeError (500) in BackedEnum::tryFrom() instead of being ignored
+                ->userUpdatesProps(['int' => ['not-a-scalar']])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame(IntEnum::HIGH, $object->int);
+                })
+            ;
+        }];
+
+>>>>>>> upstream/3.x
         yield 'Enum: null-like enum values are handled correctly' => [static function () {
             return HydrationTest::create(new class {
                 #[LiveProp(writable: true)]
@@ -934,6 +952,32 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+<<<<<<< HEAD
+=======
+        yield 'Object: an unknown property in an updated object is ignored gracefully (not a 500)' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public ?Address $address = null;
+
+                public function mount()
+                {
+                    $this->address = new Address();
+                    $this->address->address = '1 rue du Bac';
+                    $this->address->city = 'Paris';
+                }
+            })
+                ->mountWith([])
+                // a tampered payload sending an unknown property used to trigger a
+                // ReflectionException (500) instead of being ignored
+                ->userUpdatesProps(['address' => ['address' => '4 rue des lilas', 'unknownProperty' => 'x']])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame('1 rue du Bac', $object->address->address);
+                    self::assertSame('Paris', $object->address->city);
+                })
+            ;
+        }];
+
+>>>>>>> upstream/3.x
         yield 'Object: (de)hydrates correctly multidementional DTO' => [static function () {
             return HydrationTest::create(new class {
                 #[LiveProp(writable: true)]
@@ -1316,6 +1360,41 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+<<<<<<< HEAD
+=======
+        yield 'Nullable collection: using serializer (de)hydrates correctly' => [static function () {
+            return HydrationTest::create(new class {
+                /** @var \Symfony\UX\LiveComponent\Tests\Fixtures\Dto\Temperature[]|null */
+                #[LiveProp(useSerializerForHydration: true)]
+                public ?array $temperatures = [];
+
+                /**
+                 * @var string[]|null
+                 */
+                #[LiveProp(useSerializerForHydration: true)]
+                public ?array $tags = null;
+            })
+                ->mountWith([
+                    'temperatures' => [
+                        new Temperature(10, 'C'),
+                    ],
+                    'tags' => null,
+                ])
+                ->assertDehydratesTo([
+                    'temperatures' => [
+                        ['degrees' => 10, 'uom' => 'C'],
+                    ],
+                    'tags' => null,
+                ])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame(10, $object->temperatures[0]->degrees);
+                    self::assertSame('C', $object->temperatures[0]->uom);
+                    self::assertNull($object->tags);
+                })
+            ;
+        }];
+
+>>>>>>> upstream/3.x
         yield 'Updating non-writable path is rejected' => [static function () {
             $product = new ProductFixtureEntity();
             $product->name = 'original name';

@@ -23,6 +23,7 @@ import {
 import getElementAsTagText from './Util/getElementAsTagText';
 
 export { Component };
+<<<<<<< HEAD
 export type {
     ComponentHooks,
     ComponentHookName,
@@ -37,6 +38,8 @@ export type {
     LoadingStateFinishedHook,
     ModelSetHook,
 } from './Component';
+=======
+>>>>>>> upstream/3.x
 export { getComponent } from './ComponentRegistry';
 
 export interface LiveEvent extends CustomEvent {
@@ -94,11 +97,14 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     private elementEventListeners: Array<{ event: string; callback: (event: any) => void }> = [
         { event: 'input', callback: (event) => this.handleInputEvent(event) },
         { event: 'change', callback: (event) => this.handleChangeEvent(event) },
+<<<<<<< HEAD
         // [CUSTOM] When this component's element is restored via innerHTML swap
         // in morphdom (data-live-preserve), re-render to get fresh server state.
         // setTimeout defers until after Stimulus MutationObserver processes the
         // disconnect/connect cycle caused by the temporary DOM removal.
         { event: 'live:preserve-restored', callback: () => setTimeout(() => this.component.render(), 0) },
+=======
+>>>>>>> upstream/3.x
     ];
     private pendingFiles: { [key: string]: HTMLInputElement } = {};
 
@@ -112,6 +118,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     }
 
     connect() {
+<<<<<<< HEAD
         // [CUSTOM] When Stimulus reconnects a controller (disconnect → connect
         // without initialize), the old Component and its ValueStore survive.
         // If the server re-rendered with different props, recreate everything
@@ -122,6 +129,8 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
             this.createComponent();
         }
 
+=======
+>>>>>>> upstream/3.x
         this.connectComponent();
 
         this.mutationObserver.observe(this.element, {

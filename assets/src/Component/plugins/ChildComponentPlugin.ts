@@ -43,6 +43,7 @@ export default class implements PluginInterface {
                 throw new Error('missing id');
             }
 
+<<<<<<< HEAD
             // [CUSTOM] Skip children behind data-skip-morph — they will be
             // inside an innerHTML swap zone, so the server should fully
             // re-render them instead of emitting data-live-preserve.
@@ -50,6 +51,8 @@ export default class implements PluginInterface {
                 return;
             }
 
+=======
+>>>>>>> upstream/3.x
             fingerprints[child.id] = {
                 fingerprint: child.fingerprint as string,
                 tag: child.element.tagName.toLowerCase(),
@@ -59,6 +62,7 @@ export default class implements PluginInterface {
         return fingerprints;
     }
 
+<<<<<<< HEAD
     // [CUSTOM] Check if a child component is inside a data-skip-morph zone
     // relative to this parent component. If so, innerHTML swap will destroy
     // the child during morph, so we should not preserve it.
@@ -73,6 +77,8 @@ export default class implements PluginInterface {
         return false;
     }
 
+=======
+>>>>>>> upstream/3.x
     /**
      * Notifies parent of a model change if desired.
      *

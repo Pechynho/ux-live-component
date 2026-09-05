@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // [CUSTOM] Standalone vitest config. Upstream merges a shared base config from
 // the symfony/ux monorepo root, which does not exist in this fork — this file
 // replicates it (see vitest.config.base.mjs in symfony/ux).
@@ -10,3 +11,9 @@ export default defineConfig({
         setupFiles: ['./test/setup.js'],
     },
 });
+=======
+import { mergeConfig } from 'vitest/config';
+import configShared from '../../../vitest.config.base.mjs';
+
+export default mergeConfig(configShared, {});
+>>>>>>> upstream/3.x

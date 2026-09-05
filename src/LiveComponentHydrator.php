@@ -619,6 +619,13 @@ final class LiveComponentHydrator
                 return null;
             }
 
+<<<<<<< HEAD
+=======
+            if (!\is_int($value) && !\is_string($value)) {
+                throw new HydrationException(\sprintf('Invalid value sent for enum "%s".', $className));
+            }
+
+>>>>>>> upstream/3.x
             return $className::tryFrom($value);
         }
 
@@ -657,8 +664,16 @@ final class LiveComponentHydrator
 
         if (\is_array($value)) {
             $object = new $className();
+<<<<<<< HEAD
             foreach ($value as $propertyName => $propertyValue) {
                 $reflectionClass = new \ReflectionClass($className);
+=======
+            $reflectionClass = new \ReflectionClass($className);
+            foreach ($value as $propertyName => $propertyValue) {
+                if (!\is_string($propertyName) || !$reflectionClass->hasProperty($propertyName)) {
+                    throw new HydrationException(\sprintf('The property "%s" does not exist on the object "%s".', $propertyName, $className));
+                }
+>>>>>>> upstream/3.x
                 $property = $reflectionClass->getProperty($propertyName);
                 $propMetadata = $this->liveComponentMetadataFactory->createLivePropMetadata($className, $propertyName, $property, new LiveProp());
                 $this->propertyAccessor->setValue($object, $propertyName, $this->hydrateValue($propertyValue, $propMetadata, $component));

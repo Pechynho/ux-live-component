@@ -1,6 +1,10 @@
 import type { BackendAction, BackendInterface } from '../Backend/Backend';
 import type BackendRequest from '../Backend/BackendRequest';
 import BackendResponse from '../Backend/BackendResponse';
+<<<<<<< HEAD
+=======
+import type { Download } from '../Backend/BackendResponse';
+>>>>>>> upstream/3.x
 import { findComponents, registerComponent, unregisterComponent } from '../ComponentRegistry';
 import { elementBelongsToThisComponent, getValueFromElement, htmlToElement } from '../dom_utils';
 import HookManager from '../HookManager';
@@ -17,6 +21,7 @@ declare const Turbo: any;
 // Must match BatchActionController::MAX_ACTIONS_PER_BATCH on the PHP side.
 export const MAX_ACTIONS_PER_BATCH = 50;
 
+<<<<<<< HEAD
 // [CUSTOM] Counts navigations (history back/forward, Turbo visits). A LiveUrl
 // from a response is only applied when the history entry is still the one the
 // request was sent from, i.e. the epoch did not change while the request was
@@ -31,15 +36,23 @@ if (typeof window !== 'undefined') {
     window.addEventListener('turbo:visit', bumpNavigationEpoch);
 }
 
+=======
+>>>>>>> upstream/3.x
 type MaybePromise<T = void> = T | Promise<T>;
 
 export type ComponentHooks = {
     connect: (component: Component) => MaybePromise;
     disconnect: (component: Component) => MaybePromise;
+<<<<<<< HEAD
     'request:started': (requestConfig: any, controls: { abortRequest: boolean }) => MaybePromise;
     'render:started': (html: string, backendResponse: BackendResponse, controls: { shouldRender: boolean }) => MaybePromise;
     'render:finished': (component: Component) => MaybePromise;
     'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean; resetLoadingState: boolean }) => MaybePromise;
+=======
+    'request:started': (requestConfig: any) => MaybePromise;
+    'render:finished': (component: Component) => MaybePromise;
+    'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean }) => MaybePromise;
+>>>>>>> upstream/3.x
     'loading.state:started': (element: HTMLElement, request: BackendRequest) => MaybePromise;
     'loading.state:finished': (element: HTMLElement) => MaybePromise;
     'model:set': (model: string, value: any, component: Component) => MaybePromise;
@@ -51,6 +64,7 @@ export type ComponentHookCallback<T extends string = ComponentHookName> = T exte
     ? ComponentHooks[T]
     : (...args: any[]) => MaybePromise;
 
+<<<<<<< HEAD
 // [CUSTOM] Convenience types for individual hook callbacks.
 // Import these in your application for type-safe hook registration:
 //   component.on('request:started', myHook satisfies RequestStartedHook);
@@ -65,6 +79,8 @@ export type LoadingStateStartedHook = ComponentHooks['loading.state:started'];
 export type LoadingStateFinishedHook = ComponentHooks['loading.state:finished'];
 export type ModelSetHook = ComponentHooks['model:set'];
 
+=======
+>>>>>>> upstream/3.x
 export default class Component {
     readonly element: HTMLElement;
     readonly name: string;
@@ -96,6 +112,11 @@ export default class Component {
     private pendingFiles: { [key: string]: HTMLInputElement } = {};
     /** Is a request waiting to be made? */
     private isRequestPending = false;
+<<<<<<< HEAD
+=======
+    /** Once removed, the component is done: it must never talk to the server again. */
+    private isRemoved = false;
+>>>>>>> upstream/3.x
     /** Current "timeout" before the pending request should be sent. */
     private requestDebounceTimeout: number | null = null;
     private nextRequestPromise: Promise<BackendResponse>;
@@ -236,6 +257,7 @@ export default class Component {
     }
 
     /**
+<<<<<<< HEAD
      * [CUSTOM] Sends a standalone request to the given live action and returns
      * the raw Response object.
      *
@@ -258,6 +280,8 @@ export default class Component {
     }
 
     /**
+=======
+>>>>>>> upstream/3.x
      * Returns an array of models the user has modified, but whose model has not
      * yet been updated.
      */
@@ -301,7 +325,57 @@ export default class Component {
         return typeof Turbo !== 'undefined' && !this.element.closest('[data-turbo="false"]');
     }
 
+<<<<<<< HEAD
     private tryStartingRequest(): void {
+=======
+    /**
+     * Ends the component on the page.
+     *
+     * Once the final render and its events have been processed, polling stops and the
+     * component leaves the registry. The element is then marked with `data-live-removing`
+     * and left in place, so the page can animate it out without a live component still
+     * answering for it.
+     *
+     * With no animation on `[data-live-removing]`, there is nothing to wait for and the
+     * element goes on the next frame.
+     */
+    private removeFromPage(): void {
+        this.isRemoved = true;
+        this.disconnect();
+
+        const element = this.element;
+
+        // the props are what makes this element a live component: dropping them keeps
+        // anything from re-hydrating it, here or on a later render
+        for (const name of element.getAttributeNames()) {
+            if (name.startsWith('data-live-') && name.endsWith('-value')) {
+                element.removeAttribute(name);
+            }
+        }
+
+        element.setAttribute('data-live-removing', '');
+
+        // a transition only exists once the attribute has been applied, so give the browser
+        // a frame to create it before asking what is running
+        requestAnimationFrame(() => {
+            const animations = (element.getAnimations?.({ subtree: true }) ?? [])
+                // an endless animation would keep the element on the page forever
+                .filter((animation) => animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY);
+
+            Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+                element.remove();
+            });
+        });
+    }
+
+    private tryStartingRequest(): void {
+        if (this.isRemoved) {
+            // the element may still be on the page while it animates out, and it keeps its
+            // listeners until then: a click must not reach a component that is already gone
+            return;
+        }
+
+>>>>>>> upstream/3.x
         if (!this.backendRequest) {
             this.performRequest();
 
@@ -342,6 +416,7 @@ export default class Component {
             updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
             files: filesToSend,
         };
+<<<<<<< HEAD
         // [CUSTOM] Allow hooks to abort the request before it is sent.
         const requestControls = { abortRequest: false };
         this.hooks.triggerHook('request:started', requestConfig, requestControls);
@@ -354,6 +429,9 @@ export default class Component {
         // that the user navigated away while the request was in flight.
         const requestNavigationEpoch = navigationEpoch;
 
+=======
+        this.hooks.triggerHook('request:started', requestConfig);
+>>>>>>> upstream/3.x
         this.backendRequest = this.backend.makeRequest(
             requestConfig.props,
             requestConfig.actions,
@@ -370,13 +448,18 @@ export default class Component {
 
         this.backendRequest.promise.then(async (response) => {
             const backendResponse = new BackendResponse(response);
+<<<<<<< HEAD
             const html = await backendResponse.getBody();
+=======
+            const headers = backendResponse.response.headers;
+>>>>>>> upstream/3.x
 
             // clear sent files inputs
             for (const input of Object.values(this.pendingFiles)) {
                 input.value = '';
             }
 
+<<<<<<< HEAD
             // if the response does not contain a component, render as an error
             const headers = backendResponse.response.headers;
             if (
@@ -386,6 +469,17 @@ export default class Component {
                 // [CUSTOM] Added resetLoadingState control to allow clearing loading
                 // indicators on error (e.g. spinners, disabled buttons).
                 const controls = { displayError: true, resetLoadingState: false };
+=======
+            const html = await backendResponse.getBody();
+
+            // if the response does not contain a component, render as an error
+            if (
+                !headers.get('Content-Type')?.includes('application/vnd.live-component+html') &&
+                !headers.get('X-Live-Redirect') &&
+                !headers.has('X-Live-Remove')
+            ) {
+                const controls = { displayError: true };
+>>>>>>> upstream/3.x
                 this.valueStore.pushPendingPropsBackToDirty();
                 this.hooks.triggerHook('response:error', backendResponse, controls);
 
@@ -393,16 +487,20 @@ export default class Component {
                     this.renderError(html);
                 }
 
+<<<<<<< HEAD
                 if (controls.resetLoadingState) {
                     this.hooks.triggerHook('loading.state:finished', this.element);
                 }
 
+=======
+>>>>>>> upstream/3.x
                 this.backendRequest = null;
                 thisPromiseResolve(backendResponse);
 
                 return response;
             }
 
+<<<<<<< HEAD
             const liveUrl = backendResponse.getLiveUrl();
             // [CUSTOM] A response arriving during or after a navigation must not
             // rewrite the new history entry: apply the LiveUrl only if the
@@ -410,6 +508,25 @@ export default class Component {
             // the request was sent. Only the history update is skipped — the
             // response is still processed.
             if (liveUrl && this.element.isConnected && navigationEpoch === requestNavigationEpoch) {
+=======
+            // The render carries the usual LiveComponent instructions. Make this component
+            // terminal before processing them, so a synchronous event handler cannot start
+            // another request on the component that is about to leave.
+            if (backendResponse.isRemoved()) {
+                this.isRemoved = true;
+                this.processRerender(html, backendResponse);
+
+                this.backendRequest = null;
+                thisPromiseResolve(backendResponse);
+
+                this.removeFromPage();
+
+                return response;
+            }
+
+            const liveUrl = backendResponse.getLiveUrl();
+            if (liveUrl) {
+>>>>>>> upstream/3.x
                 history.replaceState(
                     history.state,
                     '',
@@ -529,6 +646,24 @@ export default class Component {
             );
         });
 
+<<<<<<< HEAD
+=======
+        // the render is done and the props are applied, so a download failing here must not
+        // take the whole request down with it
+        try {
+            const downloadUrl = backendResponse.getDownloadUrl();
+            const download = backendResponse.getDownload();
+
+            if (downloadUrl) {
+                triggerDownload({ url: downloadUrl });
+            } else if (download) {
+                triggerDownload(download);
+            }
+        } catch (error) {
+            console.error('Could not start the download:', error);
+        }
+
+>>>>>>> upstream/3.x
         this.hooks.triggerHook('render:finished', this);
     }
 
@@ -661,6 +796,17 @@ export function proxifyComponent(component: Component): Component {
                 return component.getData(prop);
             }
 
+<<<<<<< HEAD
+=======
+            // protocol probes performed implicitly by JSON.stringify() ("toJSON") and
+            // by promise assimilation ("then", e.g. `await component`) must not be
+            // mistaken for actions: returning a callable would let those protocols
+            // invoke it, queueing a real server action of that name
+            if ('toJSON' === prop || 'then' === prop) {
+                return undefined;
+            }
+
+>>>>>>> upstream/3.x
             // try to call an action
             return (args: string[]) => {
                 return component.action.apply(component, [prop, args]);
@@ -681,3 +827,35 @@ export function proxifyComponent(component: Component): Component {
         },
     });
 }
+<<<<<<< HEAD
+=======
+
+/**
+ * Hands a file to the browser without leaving the page, either from a URL it fetches
+ * itself or from a blob carried in the response.
+ *
+ * The object URL is revoked on a delay: revoking it in the same tick can cancel the
+ * download in some browsers.
+ */
+function triggerDownload(download: Download | { url: string }): void {
+    const fromUrl = 'url' in download;
+    const href = fromUrl ? download.url : URL.createObjectURL(download.blob);
+    const link = Object.assign(document.createElement('a'), {
+        href,
+        // an empty download attribute keeps the name the server sends. Note it is ignored
+        // cross-origin, where the remote Content-Disposition decides instead
+        download: fromUrl ? '' : download.filename,
+        style: 'display: none',
+    });
+
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+        document.body.removeChild(link);
+        if (!fromUrl) {
+            URL.revokeObjectURL(href);
+        }
+    }, 75);
+}
+>>>>>>> upstream/3.x
