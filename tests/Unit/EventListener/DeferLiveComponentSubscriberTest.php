@@ -26,7 +26,11 @@ use Twig\Runtime\EscaperRuntime;
  */
 class DeferLiveComponentSubscriberTest extends TestCase
 {
+<<<<<<< HEAD
     public function testLoadingAttributeIsExtracted()
+=======
+    public function testLoadingAttributeIsExtracted(): void
+>>>>>>> upstream/3.x
     {
         $subscriber = new DeferLiveComponentSubscriber();
         $event = $this->createPostMountEvent(['loading' => 'lazy']);
@@ -38,7 +42,11 @@ class DeferLiveComponentSubscriberTest extends TestCase
         $this->assertArrayNotHasKey('loading', $event->getData());
     }
 
+<<<<<<< HEAD
     public function testLoadingAttributeIsNotExtractedWhenComponentIsNotLive()
+=======
+    public function testLoadingAttributeIsNotExtractedWhenComponentIsNotLive(): void
+>>>>>>> upstream/3.x
     {
         $data = ['loading' => 'lazy'];
         $event = new PostMountEvent(new \stdClass(), $data, new ComponentMetadata([]));
@@ -51,7 +59,11 @@ class DeferLiveComponentSubscriberTest extends TestCase
         $this->assertArrayHasKey('loading', $event->getData());
     }
 
+<<<<<<< HEAD
     public function testLoadingAttributesAreRemoved()
+=======
+    public function testLoadingAttributesAreRemoved(): void
+>>>>>>> upstream/3.x
     {
         $subscriber = new DeferLiveComponentSubscriber();
         $event = $this->createPostMountEvent([
@@ -68,7 +80,11 @@ class DeferLiveComponentSubscriberTest extends TestCase
     }
 
     #[DataProvider('provideInvalidLoadingValues')]
+<<<<<<< HEAD
     public function testInvalidLoadingValuesThrows(mixed $value)
+=======
+    public function testInvalidLoadingValuesThrows(mixed $value): void
+>>>>>>> upstream/3.x
     {
         $subscriber = new DeferLiveComponentSubscriber();
         $event = $this->createPostMountEvent([
@@ -90,7 +106,11 @@ class DeferLiveComponentSubscriberTest extends TestCase
         ];
     }
 
+<<<<<<< HEAD
     public function testOnPreRenderUsesEventTemplateInsteadOfMetadataTemplate()
+=======
+    public function testOnPreRenderUsesEventTemplateInsteadOfMetadataTemplate(): void
+>>>>>>> upstream/3.x
     {
         $subscriber = new DeferLiveComponentSubscriber();
 
@@ -123,7 +143,11 @@ class DeferLiveComponentSubscriberTest extends TestCase
         $this->assertSame('value', $variables['existing_var']);
     }
 
+<<<<<<< HEAD
     public function testOnPreRenderDoesNothingWhenNoLoadingMetadata()
+=======
+    public function testOnPreRenderDoesNothingWhenNoLoadingMetadata(): void
+>>>>>>> upstream/3.x
     {
         $subscriber = new DeferLiveComponentSubscriber();
 

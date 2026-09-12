@@ -26,22 +26,38 @@ use Symfony\UX\LiveComponent\Tests\Fixtures\Component\ComponentWithRepeatedLiveL
  */
 final class AsLiveComponentTest extends TestCase
 {
+<<<<<<< HEAD
     public function testPreDehydrateMethodsAreOrderedByPriority()
+=======
+    public function testPreDehydrateMethodsAreOrderedByPriority(): void
+>>>>>>> upstream/3.x
     {
         $hooks = AsLiveComponent::preDehydrateMethods(
             new class {
                 #[PreDehydrate(priority: -10)]
+<<<<<<< HEAD
                 public function hook1()
+=======
+                public function hook1(): void
+>>>>>>> upstream/3.x
                 {
                 }
 
                 #[PreDehydrate(priority: 10)]
+<<<<<<< HEAD
                 public function hook2()
+=======
+                public function hook2(): void
+>>>>>>> upstream/3.x
                 {
                 }
 
                 #[PreDehydrate]
+<<<<<<< HEAD
                 public function hook3()
+=======
+                public function hook3(): void
+>>>>>>> upstream/3.x
                 {
                 }
             }
@@ -53,11 +69,16 @@ final class AsLiveComponentTest extends TestCase
         $this->assertSame('hook1', $hooks[2]->name);
     }
 
+<<<<<<< HEAD
     public function testPostHydrateMethodsAreOrderedByPriority()
+=======
+    public function testPostHydrateMethodsAreOrderedByPriority(): void
+>>>>>>> upstream/3.x
     {
         $hooks = AsLiveComponent::postHydrateMethods(
             new class {
                 #[PostHydrate(priority: -10)]
+<<<<<<< HEAD
                 public function hook1()
                 {
                 }
@@ -131,11 +152,121 @@ final class AsLiveComponentTest extends TestCase
     {
         $liveListeners = AsLiveComponent::liveListeners(DummyLiveComponent::class);
 
+=======
+                public function hook1(): void
+                {
+                }
+
+                #[PostHydrate(priority: 10)]
+                public function hook2(): void
+                {
+                }
+
+                #[PostHydrate]
+                public function hook3(): void
+                {
+                }
+            }
+        );
+
+        $this->assertCount(3, $hooks);
+        $this->assertSame('hook2', $hooks[0]->name);
+        $this->assertSame('hook3', $hooks[1]->name);
+        $this->assertSame('hook1', $hooks[2]->name);
+    }
+
+    public function testPreMountHooksAreOrderedByPriority(): void
+    {
+        $hooks = AsLiveComponent::preReRenderMethods(
+            new class {
+                #[PreReRender(priority: -10)]
+                public function hook1(): void
+                {
+                }
+
+                #[PreReRender(priority: 10)]
+                public function hook2(): void
+                {
+                }
+
+                #[PreReRender]
+                public function hook3(): void
+                {
+                }
+            }
+        );
+
+        $this->assertCount(3, $hooks);
+        $this->assertSame('hook2', $hooks[0]->name);
+        $this->assertSame('hook3', $hooks[1]->name);
+        $this->assertSame('hook1', $hooks[2]->name);
+    }
+
+    public function testCanGetPostHydrateMethodsFromClassString(): void
+    {
+        $methods = AsLiveComponent::postHydrateMethods(DummyLiveComponent::class);
+
+        $this->assertCount(1, $methods);
+        $this->assertSame('method', $methods[0]->getName());
+        $this->assertSame(DummyLiveComponent::class, $methods[0]->getDeclaringClass()?->getName());
+    }
+
+    public function testCanGetLiveListeners(): void
+    {
+        $liveListeners = AsLiveComponent::liveListeners(new Component5());
+
+        $this->assertCount(1, $liveListeners);
+        $this->assertSame([
+            'action' => 'aListenerActionMethod',
+            'event' => 'the_event_name',
+        ], $liveListeners[0]);
+    }
+
+    public function testCanGetLiveListenersFromClassString(): void
+    {
+        $liveListeners = AsLiveComponent::liveListeners(DummyLiveComponent::class);
+
+>>>>>>> upstream/3.x
         $this->assertCount(1, $liveListeners);
         $this->assertSame([
             'action' => 'method',
             'event' => 'event_name',
         ], $liveListeners[0]);
+<<<<<<< HEAD
+=======
+    }
+
+    public function testCanGetRepeatedLiveListeners(): void
+    {
+        $liveListeners = AsLiveComponent::liveListeners(new ComponentWithRepeatedLiveListener());
+
+        $this->assertCount(4, $liveListeners);
+        $this->assertSame([
+            [
+                'action' => 'onBar',
+                'event' => 'bar',
+            ],
+            [
+                'action' => 'onFooBar',
+                'event' => 'foo',
+            ],
+            [
+                'action' => 'onFooBar',
+                'event' => 'bar',
+            ],
+            [
+                'action' => 'onFooBar',
+                'event' => 'foo:bar',
+            ],
+        ], $liveListeners);
+    }
+
+    public function testCanGetRepeatedLiveListenersFromClassString(): void
+    {
+        $liveListeners = AsLiveComponent::liveListeners(ComponentWithRepeatedLiveListener::class);
+
+        $this->assertCount(4, $liveListeners);
+>>>>>>> upstream/3.x
     }
 
     public function testCanGetRepeatedLiveListeners()

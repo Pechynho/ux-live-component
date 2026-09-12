@@ -18,7 +18,11 @@ class RequestInitializerSubscriberTest extends KernelTestCase
 {
     use HasBrowser;
 
+<<<<<<< HEAD
     public function testQueryStringPropsInitialization()
+=======
+    public function testQueryStringPropsInitialization(): void
+>>>>>>> upstream/3.x
     {
         $queryString = '?'
             .'stringProp=foo'

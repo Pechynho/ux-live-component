@@ -25,7 +25,11 @@ class ComponentWithFormTest extends KernelTestCase
     use Factories;
     use ResetDatabase;
 
+<<<<<<< HEAD
     public function testFormValues()
+=======
+    public function testFormValues(): void
+>>>>>>> upstream/3.x
     {
         $category = CategoryFixtureEntityFactory::createMany(5);
         $id = $category[0]->getId();

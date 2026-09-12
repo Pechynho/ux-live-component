@@ -17,7 +17,11 @@ use Twig\Environment;
 
 final class DeterministicTwigIdCalculatorTest extends KernelTestCase
 {
+<<<<<<< HEAD
     public function testReturnsDeterministicId()
+=======
+    public function testReturnsDeterministicId(): void
+>>>>>>> upstream/3.x
     {
         /** @var Environment $twig */
         $twig = self::getContainer()->get('twig');

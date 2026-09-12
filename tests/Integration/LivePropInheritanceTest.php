@@ -33,7 +33,11 @@ final class LivePropInheritanceTest extends KernelTestCase
      * Sanity check: the parent component itself must have the LiveProp with
      * the correct fieldName callable.
      */
+<<<<<<< HEAD
     public function testParentComponentHasLivePropWithFieldName()
+=======
+    public function testParentComponentHasLivePropWithFieldName(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
 
@@ -57,7 +61,11 @@ final class LivePropInheritanceTest extends KernelTestCase
      * Before the fix the LiveProp was either not registered at all for the child,
      * or registered without the fieldName, causing the frontend key mismatch.
      */
+<<<<<<< HEAD
     public function testChildComponentInheritsLivePropWithFieldName()
+=======
+    public function testChildComponentInheritsLivePropWithFieldName(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
 
@@ -80,7 +88,11 @@ final class LivePropInheritanceTest extends KernelTestCase
     /**
      * Sanity check: the save() action must be allowed on the parent component.
      */
+<<<<<<< HEAD
     public function testParentComponentHasSaveAction()
+=======
+    public function testParentComponentHasSaveAction(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
 
@@ -94,7 +106,11 @@ final class LivePropInheritanceTest extends KernelTestCase
      * Regression test for Bug #3: the save() action declared with #[LiveAction]
      * on the parent class must also be allowed on the child component.
      */
+<<<<<<< HEAD
     public function testChildComponentInheritsLiveAction()
+=======
+    public function testChildComponentInheritsLiveAction(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
 
@@ -110,7 +126,11 @@ final class LivePropInheritanceTest extends KernelTestCase
      * #[LiveListener("save")] on the parent class must appear in the child's
      * live listeners.
      */
+<<<<<<< HEAD
     public function testChildComponentInheritsLiveListener()
+=======
+    public function testChildComponentInheritsLiveListener(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
 

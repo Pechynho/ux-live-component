@@ -26,13 +26,18 @@ use Twig\Environment;
 
 final class LiveComponentHydratorTest extends TestCase
 {
+<<<<<<< HEAD
     public function testConstructWithEmptySecret()
+=======
+    public function testConstructWithEmptySecret(): void
+>>>>>>> upstream/3.x
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('A non-empty secret is required.');
 
         new LiveComponentHydrator(
             [],
+<<<<<<< HEAD
             $this->createMock(PropertyAccessorInterface::class),
             $this->createMock(LiveComponentMetadataFactory::class),
             $this->createMock(NormalizerInterface::class),
@@ -42,16 +47,35 @@ final class LiveComponentHydratorTest extends TestCase
     }
 
     public function testItCanHydrateWithNullValues()
+=======
+            $this->createStub(PropertyAccessorInterface::class),
+            $this->createStub(LiveComponentMetadataFactory::class),
+            $this->createStub(NormalizerInterface::class),
+            '',
+            $this->createStub(Environment::class),
+        );
+    }
+
+    public function testItCanHydrateWithNullValues(): void
+>>>>>>> upstream/3.x
     {
         // BC layer when "symfony/type-info" is not available
         if (!class_exists(Type::class)) {
             $hydrator = new LiveComponentHydrator(
                 [],
+<<<<<<< HEAD
                 $this->createMock(PropertyAccessorInterface::class),
                 $this->createMock(LiveComponentMetadataFactory::class),
                 new Serializer(normalizers: [new ObjectNormalizer()]),
                 'foo',
                 $this->createMock(Environment::class),
+=======
+                $this->createStub(PropertyAccessorInterface::class),
+                $this->createStub(LiveComponentMetadataFactory::class),
+                new Serializer(normalizers: [new ObjectNormalizer()]),
+                'foo',
+                $this->createStub(Environment::class),
+>>>>>>> upstream/3.x
             );
 
             $hydratedValue = $hydrator->hydrateValue(
@@ -64,11 +88,19 @@ final class LiveComponentHydratorTest extends TestCase
         } else {
             $hydrator = new LiveComponentHydrator(
                 [],
+<<<<<<< HEAD
                 $this->createMock(PropertyAccessorInterface::class),
                 $this->createMock(LiveComponentMetadataFactory::class),
                 new Serializer(normalizers: [new ObjectNormalizer()]),
                 'foo',
                 $this->createMock(Environment::class),
+=======
+                $this->createStub(PropertyAccessorInterface::class),
+                $this->createStub(LiveComponentMetadataFactory::class),
+                new Serializer(normalizers: [new ObjectNormalizer()]),
+                'foo',
+                $this->createStub(Environment::class),
+>>>>>>> upstream/3.x
             );
 
             $hydratedValue = $hydrator->hydrateValue(

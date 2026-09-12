@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 /* src/live.css */
 [data-loading=""],
 [data-loading=show],
 [data-loading*="|show"] {
   display: none;
 }
+=======
+[data-loading=""],[data-loading=show],[data-loading*=\|show]{display:none}
+>>>>>>> upstream/3.x

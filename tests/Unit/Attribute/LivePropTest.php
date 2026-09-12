@@ -57,7 +57,11 @@ final class LivePropTest extends TestCase
         $this->assertSame('fallback', new LiveProp()->calculateFieldName($component, 'fallback'));
     }
 
+<<<<<<< HEAD
     public function testIsIdentityWritableAndWritablePaths()
+=======
+    public function testIsIdentityWritableAndWritablePaths(): void
+>>>>>>> upstream/3.x
     {
         $liveProp = new LiveProp(true);
         $this->assertTrue($liveProp->isIdentityWritable());
@@ -73,7 +77,11 @@ final class LivePropTest extends TestCase
     }
 
     // test updateFromParent property being set and accessed with acceptUpdatesFromParent()
+<<<<<<< HEAD
     public function testUpdateFromParent()
+=======
+    public function testUpdateFromParent(): void
+>>>>>>> upstream/3.x
     {
         $liveProp = new LiveProp();
         $this->assertFalse($liveProp->acceptUpdatesFromParent());

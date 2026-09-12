@@ -19,9 +19,15 @@ use Symfony\UX\LiveComponent\EventListener\LiveComponentSubscriber;
 
 class LiveComponentSubscriberTest extends TestCase
 {
+<<<<<<< HEAD
     public function testDefaultConstructedSubscriberRejectsRequestWithoutAcceptHeader()
     {
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class));
+=======
+    public function testDefaultConstructedSubscriberRejectsRequestWithoutAcceptHeader(): void
+    {
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class));
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
@@ -32,20 +38,36 @@ class LiveComponentSubscriberTest extends TestCase
         );
     }
 
+<<<<<<< HEAD
     public function testDefaultConstructedSubscriberAcceptsRequestWithProperAcceptHeader()
     {
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class));
+=======
+    public function testDefaultConstructedSubscriberAcceptsRequestWithProperAcceptHeader(): void
+    {
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class));
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
         $request->headers->set('Accept', 'application/vnd.live-component+html');
+<<<<<<< HEAD
+=======
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+>>>>>>> upstream/3.x
 
         $this->assertTrue($this->callIsLiveComponentRequest($subscriber, $request));
     }
 
+<<<<<<< HEAD
     public function testTestModeBypassesAcceptHeaderCheck()
     {
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), true);
+=======
+    public function testTestModeBypassesAcceptHeaderCheck(): void
+    {
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), true);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some_component');
@@ -66,7 +88,11 @@ class LiveComponentSubscriberTest extends TestCase
     #[DataProvider('provideProductionGateScenarios')]
     public function testProductionGateRequiresNonSafelistedHeader(array $headers, bool $expected): void
     {
+<<<<<<< HEAD
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), testMode: false);
+=======
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), testMode: false);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->attributes->set('_live_component', 'some-component');
@@ -74,7 +100,11 @@ class LiveComponentSubscriberTest extends TestCase
             $request->headers->set($name, $value);
         }
 
+<<<<<<< HEAD
         $isLiveRequest = (new \ReflectionMethod($subscriber, 'isLiveComponentRequest'))->invoke($subscriber, $request);
+=======
+        $isLiveRequest = new \ReflectionMethod($subscriber, 'isLiveComponentRequest')->invoke($subscriber, $request);
+>>>>>>> upstream/3.x
 
         $this->assertSame($expected, $isLiveRequest);
     }
@@ -110,13 +140,21 @@ class LiveComponentSubscriberTest extends TestCase
 
     public function testRequestWithoutLiveComponentAttributeIsRejected(): void
     {
+<<<<<<< HEAD
         $subscriber = new LiveComponentSubscriber($this->createMock(ContainerInterface::class), testMode: false);
+=======
+        $subscriber = new LiveComponentSubscriber($this->createStub(ContainerInterface::class), testMode: false);
+>>>>>>> upstream/3.x
 
         $request = new Request();
         $request->headers->set('Accept', 'application/vnd.live-component+html');
         $request->headers->set('X-Requested-With', 'XMLHttpRequest');
 
+<<<<<<< HEAD
         $isLiveRequest = (new \ReflectionMethod($subscriber, 'isLiveComponentRequest'))->invoke($subscriber, $request);
+=======
+        $isLiveRequest = new \ReflectionMethod($subscriber, 'isLiveComponentRequest')->invoke($subscriber, $request);
+>>>>>>> upstream/3.x
 
         $this->assertFalse($isLiveRequest);
     }

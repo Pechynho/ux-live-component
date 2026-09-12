@@ -18,7 +18,11 @@ use Symfony\UX\LiveComponent\Util\ModelBindingParser;
 final class ModelBindingParserTest extends TestCase
 {
     #[DataProvider('getModelStringTests')]
+<<<<<<< HEAD
     public function testParseAllValidStrings(string $input, array $expectedBindings)
+=======
+    public function testParseAllValidStrings(string $input, array $expectedBindings): void
+>>>>>>> upstream/3.x
     {
         $parser = new ModelBindingParser();
         $this->assertEquals($expectedBindings, $parser->parse($input));
@@ -42,7 +46,11 @@ final class ModelBindingParserTest extends TestCase
         ]];
     }
 
+<<<<<<< HEAD
     public function testParseThrowsExceptionWithMultipleColons()
+=======
+    public function testParseThrowsExceptionWithMultipleColons(): void
+>>>>>>> upstream/3.x
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid value "foo:bar:baz" given for "data-model"');

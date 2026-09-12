@@ -16,7 +16,11 @@ use Symfony\UX\LiveComponent\Util\LiveAttributesCollection;
 
 class LiveAttributesCollectionTest extends KernelTestCase
 {
+<<<<<<< HEAD
     public function testToArray()
+=======
+    public function testToArray(): void
+>>>>>>> upstream/3.x
     {
         self::bootKernel();
         $collection = new LiveAttributesCollection(self::getContainer()->get('twig'));
