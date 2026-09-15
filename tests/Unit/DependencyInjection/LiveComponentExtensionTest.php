@@ -18,7 +18,11 @@ use Symfony\UX\LiveComponent\DependencyInjection\LiveComponentExtension;
 
 class LiveComponentExtensionTest extends TestCase
 {
+<<<<<<< HEAD
     public function testKernelSecretIsUsedByDefault()
+=======
+    public function testKernelSecretIsUsedByDefault(): void
+>>>>>>> upstream/3.x
     {
         $container = $this->createContainer();
         $container->registerExtension(new LiveComponentExtension());
@@ -29,7 +33,11 @@ class LiveComponentExtensionTest extends TestCase
         $this->assertSame('%kernel.secret%', $container->getDefinition('ux.live_component.fingerprint_calculator')->getArgument(0));
     }
 
+<<<<<<< HEAD
     public function testCustomSecretIsUsedInDefinition()
+=======
+    public function testCustomSecretIsUsedInDefinition(): void
+>>>>>>> upstream/3.x
     {
         $container = $this->createContainer();
         $container->registerExtension(new LiveComponentExtension());
