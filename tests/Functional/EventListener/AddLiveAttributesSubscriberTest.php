@@ -23,6 +23,16 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
 {
     use HasBrowser;
     use LiveComponentTestHelper;
+<<<<<<< HEAD
+=======
+
+    /**
+     * The deterministic id of the "todo_item" components in todo_list.html.twig.
+     * If that template changes, this will need to be updated.
+     */
+    public const TODO_ITEM_DETERMINISTIC_PREFIX = 'live-1715058793-';
+    public const TODO_ITEM_DETERMINISTIC_PREFIX_EMBEDDED = 'live-2285361477-';
+>>>>>>> upstream/3.x
 
     /**
      * The deterministic id of the "todo_item" components in todo_list.html.twig.
@@ -52,7 +62,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertArrayHasKey('id', $props['@attributes']);
     }
 
+<<<<<<< HEAD
     public function testCanUseCustomAttributesVariableName()
+=======
+    public function testCanUseCustomAttributesVariableName(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_custom_attributes')
@@ -68,7 +82,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertArrayHasKey('@checksum', $props);
     }
 
+<<<<<<< HEAD
     public function testItAddsIdAndFingerprintToChildComponent()
+=======
+    public function testItAddsIdAndFingerprintToChildComponent(): void
+>>>>>>> upstream/3.x
     {
         $templateName = 'components/todo_list.html.twig';
         $obscuredName = 'd9bcb8935cbb4282ac5d227fc82ae782';
@@ -100,7 +118,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertSame('XSdvsiDR8VG0GFDQbOnj74XfSmfL6WrzMbSQcdIRhSs=', $lis->eq(1)->attr('data-live-fingerprint-value'));
     }
 
+<<<<<<< HEAD
     public function testItDoesNotOverrideDataLiveIdIfSpecified()
+=======
+    public function testItDoesNotOverrideDataLiveIdIfSpecified(): void
+>>>>>>> upstream/3.x
     {
         $templateName = 'components/todo_list.html.twig';
         $obscuredName = 'a643d58357b14c9bb077f0c00a742059';
@@ -119,7 +141,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertSame('todo-item-3', $lis->last()->attr('id'));
     }
 
+<<<<<<< HEAD
     public function testQueryStringMappingAttribute()
+=======
+    public function testQueryStringMappingAttribute(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_component_with_url_bound_props')
@@ -151,7 +177,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertEquals($expected, $queryMapping);
     }
 
+<<<<<<< HEAD
     public function testAbsoluteUrl()
+=======
+    public function testAbsoluteUrl(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_with_absolute_url')
@@ -173,7 +203,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertSame($props['count'], 0);
     }
 
+<<<<<<< HEAD
     public function testAbsoluteUrlWithLiveQueryProp()
+=======
+    public function testAbsoluteUrlWithLiveQueryProp(): void
+>>>>>>> upstream/3.x
     {
         $props = [];
         $div = $this->browser()
@@ -204,7 +238,11 @@ final class AddLiveAttributesSubscriberTest extends KernelTestCase
         $this->assertSame($props['count'], 2);
     }
 
+<<<<<<< HEAD
     public function testFetchCredentials()
+=======
+    public function testFetchCredentials(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_with_fetch_credentials')

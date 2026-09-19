@@ -24,7 +24,11 @@ class ValidatableComponentTraitTest extends KernelTestCase
     use LiveComponentTestHelper;
     use ResetDatabase;
 
+<<<<<<< HEAD
     public function testFormValuesRebuildAfterFormChanges()
+=======
+    public function testFormValuesRebuildAfterFormChanges(): void
+>>>>>>> upstream/3.x
     {
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('validating_component'))->getProps();
 

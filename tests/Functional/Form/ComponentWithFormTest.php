@@ -311,6 +311,7 @@ class ComponentWithFormTest extends KernelTestCase
         ;
     }
 
+<<<<<<< HEAD
     public function testResetForm()
     {
         CategoryFixtureEntityFactory::createMany(5);
@@ -366,6 +367,63 @@ class ComponentWithFormTest extends KernelTestCase
 
     public function testLiveCollectionTypeFieldsAddedAndRemoved()
     {
+=======
+    public function testResetForm(): void
+    {
+        CategoryFixtureEntityFactory::createMany(5);
+        $mounted = $this->mountComponent('form_with_many_different_fields_type');
+
+        $dehydratedProps = $this->dehydrateComponent($mounted)->getProps();
+
+        $browser = $this->browser();
+        $crawler = $browser
+            ->post('/_components/form_with_many_different_fields_type', [
+                'body' => [
+                    'data' => json_encode([
+                        'props' => $dehydratedProps,
+                        'updated' => [
+                            'form' => [
+                                'text' => 'foo',
+                                'textarea' => 'longer than 5',
+                            ],
+                            'validatedFields' => ['form.text', 'form.textarea'],
+                        ],
+                    ]),
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertContains('textarea is too long')
+            ->crawler()
+        ;
+
+        $div = $crawler->filter('[data-controller="live"]');
+        $dehydratedProps = json_decode($div->attr('data-live-props-value'), true);
+
+        $browser
+            ->post('/_components/form_with_many_different_fields_type/submitAndResetForm', [
+                'body' => ['data' => json_encode([
+                    'props' => $dehydratedProps,
+                    'updated' => ['form.textarea' => 'short'],
+                ])],
+            ])
+            ->assertStatus(200)
+            ->assertContains('<textarea id="form_textarea" name="form[textarea]" required="required"></textarea>')
+        ;
+
+        // try resetting without submitting
+        $browser
+            ->post('/_components/form_with_many_different_fields_type/resetFormWithoutSubmitting', [
+                'body' => ['data' => json_encode(['props' => $dehydratedProps])],
+            ])
+            ->assertStatus(200)
+            ->assertNotContains('textarea is too long')
+            ->assertContains('<textarea id="form_textarea" name="form[textarea]" required="required"></textarea>')
+        ;
+    }
+
+    public function testLiveCollectionTypeFieldsAddedAndRemoved(): void
+    {
+>>>>>>> upstream/3.x
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('form_with_live_collection_type'))->getProps();
         $updatedProps = [];
 
@@ -456,7 +514,11 @@ class ComponentWithFormTest extends KernelTestCase
         ;
     }
 
+<<<<<<< HEAD
     public function testFormWithLivePropContainingAnEntityImplementingAnInterface()
+=======
+    public function testFormWithLivePropContainingAnEntityImplementingAnInterface(): void
+>>>>>>> upstream/3.x
     {
         $user = persist(User::class, ['username' => 'Fabien']);
         self::assertInstanceOf(User::class, $user);
@@ -490,7 +552,11 @@ class ComponentWithFormTest extends KernelTestCase
         self::assertEquals('Nicolas', $user->username);
     }
 
+<<<<<<< HEAD
     public function testSubmitFormExceptionMessageContainsFieldPathsAndMessages()
+=======
+    public function testSubmitFormExceptionMessageContainsFieldPathsAndMessages(): void
+>>>>>>> upstream/3.x
     {
         $mounted = $this->mountComponent('form_with_collection_type');
         $dehydratedProps = $this->dehydrateComponent($mounted)->getProps();

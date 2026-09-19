@@ -99,9 +99,16 @@ class LiveUrlSubscriber implements EventSubscriberInterface, ServiceSubscriberIn
 
     private function generateNewLiveUrl(string $previousUrl, array $pathProps, array $queryProps): string
     {
+<<<<<<< HEAD
         $previousUrlParsed = parse_url($previousUrl);
         $newUrl = $previousUrlParsed['path'];
         $newQueryString = $previousUrlParsed['query'] ?? '';
+=======
+        [$previousPath, $previousQueryString] = array_pad(explode('?', $previousUrl, 2), 2, null);
+
+        $newUrl = $previousPath;
+        $newQueryString = $previousQueryString;
+>>>>>>> upstream/3.x
 
         if ([] !== $pathProps) {
             $router = $this->getRouter();
@@ -112,7 +119,11 @@ class LiveUrlSubscriber implements EventSubscriberInterface, ServiceSubscriberIn
                 $tmpContext->setMethod('GET');
                 $router->setContext($tmpContext);
 
+<<<<<<< HEAD
                 $routeMatched = $router->match($previousUrlParsed['path']);
+=======
+                $routeMatched = $router->match($previousPath);
+>>>>>>> upstream/3.x
                 $routeParams = [];
                 foreach ($routeMatched as $k => $v) {
                     if ('_route' === $k || '_controller' === $k) {
@@ -130,6 +141,7 @@ class LiveUrlSubscriber implements EventSubscriberInterface, ServiceSubscriberIn
         }
 
         if ([] !== $queryProps) {
+<<<<<<< HEAD
             $previousQueryString = [];
 
             if (isset($previousUrlParsed['query'])) {
@@ -137,6 +149,15 @@ class LiveUrlSubscriber implements EventSubscriberInterface, ServiceSubscriberIn
             }
 
             $newQueryString = http_build_query([...$previousQueryString, ...$queryProps]);
+=======
+            $previousQueryProps = [];
+
+            if (isset($previousQueryString)) {
+                parse_str($previousQueryString, $previousQueryProps);
+            }
+
+            $newQueryString = http_build_query([...$previousQueryProps, ...$queryProps]);
+>>>>>>> upstream/3.x
         }
 
         return $newUrl.($newQueryString ? '?'.$newQueryString : '');

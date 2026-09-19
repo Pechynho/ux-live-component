@@ -1,9 +1,17 @@
 /assets/node_modules/
 /config/reference.php
+<<<<<<< HEAD
+=======
+/config/schema.json
+>>>>>>> upstream/3.x
 /vendor/
 /composer.lock
 /phpunit.xml
 /.phpunit.cache
 
 /var
+<<<<<<< HEAD
 /.idea
+=======
+/config/reference.php
+>>>>>>> upstream/3.x

@@ -11,7 +11,11 @@ import { Controller } from '@hotwired/stimulus';
 import { getByTestId, waitFor } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
+<<<<<<< HEAD
 import { findChildren } from '../../../src/ComponentRegistry';
+=======
+import { findChildren, findComponents } from '../../../src/ComponentRegistry';
+>>>>>>> upstream/3.x
 import {
     createTest,
     createTestForExistingComponent,
@@ -103,6 +107,58 @@ describe('Component parent -> child initialization and rendering tests', () => {
         expect(findChildren(test.component).length).toEqual(1);
     });
 
+<<<<<<< HEAD
+=======
+    it('reinitializes the component when its server root ID changes', async () => {
+        const test = await createTest(
+            { id: 'original-root' },
+            (data: any) => `<div ${initComponent(data, { id: data.id })}>Root</div>`
+        );
+        const original = getComponent(test.element);
+        test.expectsAjaxCall().serverWillChangeProps((data: any) => {
+            data.id = 'new-root';
+        });
+
+        await test.component.render();
+
+        await waitFor(() => expect(getComponent(document.getElementById('new-root'))).not.toBe(original));
+        expect(getComponent(document.getElementById('new-root')).id).toBe('new-root');
+    });
+
+    it.each(['client-child-id', '', null])('preserves a child after its DOM ID changes to "%s"', async (clientId) => {
+        const test = await createTest(
+            { updated: false },
+            (data: any) => `
+                <div ${initComponent(data)}>
+                    ${
+                        data.updated
+                            ? '<div id="server-child-id" data-live-preserve data-parent-update="yes"></div>'
+                            : `<div ${initComponent({}, { id: 'server-child-id' })} data-testid="child">Child</div>`
+                    }
+                </div>
+            `
+        );
+        const childElement = getByTestId(test.element, 'child');
+        const child = getComponent(childElement);
+        if (clientId === null) {
+            childElement.removeAttribute('id');
+        } else {
+            childElement.id = clientId;
+        }
+        test.expectsAjaxCall().serverWillChangeProps((data: any) => {
+            data.updated = true;
+        });
+
+        await test.component.render();
+
+        expect(getByTestId(test.element, 'child')).toBe(childElement);
+        expect(getComponent(childElement)).toBe(child);
+        expect(childElement.getAttribute('id')).toBe(clientId);
+        expect(childElement).toHaveAttribute('data-parent-update', 'yes');
+        expect(child.id).toBe('server-child-id');
+    });
+
+>>>>>>> upstream/3.x
     it('new child marked as data-live-preserve is ignored except for new attributes', async () => {
         const originalChild = `
             <div ${initComponent({}, { id: 'the-child-id' })}>
@@ -311,9 +367,13 @@ describe('Component parent -> child initialization and rendering tests', () => {
         expect(childComponent.element).toHaveTextContent('Full Name: RYAN WEAVER');
     });
 
+<<<<<<< HEAD
     it('child controller changes its component if child id changes', async () => {
         // both are a span in the same position: so the same Stimulus controller
         // will be used for both.
+=======
+    it('replaces the child component when its server ID changes', async () => {
+>>>>>>> upstream/3.x
         const originalChildTemplate = (data: any) => `
             <span ${initComponent(data, { id: 'original-child-id' })} data-testid="child-component">
                 Original Child
@@ -337,6 +397,14 @@ describe('Component parent -> child initialization and rendering tests', () => {
         );
 
         const originalChildElement = getByTestId(test.element, 'child-component');
+<<<<<<< HEAD
+=======
+        const originalChildComponent = getComponent(originalChildElement);
+        const originalController = getStimulusApplication().getControllerForElementAndIdentifier(
+            originalChildElement,
+            'live'
+        );
+>>>>>>> upstream/3.x
 
         // Re-render the parent
         test.expectsAjaxCall().serverWillChangeProps((data: any) => {
@@ -354,9 +422,26 @@ describe('Component parent -> child initialization and rendering tests', () => {
 
         expect(findChildren(test.component).length).toEqual(1);
         const newChildElement = getByTestId(test.element, 'child-component');
+<<<<<<< HEAD
         expect(newChildElement).toEqual(originalChildElement);
         const childComponent = getComponent(newChildElement);
         expect(childComponent.id).toEqual('new-child-id');
+=======
+        expect(newChildElement).not.toBe(originalChildElement);
+        expect(originalChildElement.isConnected).toBe(false);
+        expect(getStimulusApplication().getControllerForElementAndIdentifier(originalChildElement, 'live')).toBeNull();
+        expect(getStimulusApplication().getControllerForElementAndIdentifier(newChildElement, 'live')).not.toBe(
+            originalController
+        );
+        const childComponent = getComponent(newChildElement);
+        expect(childComponent).not.toBe(originalChildComponent);
+        expect(childComponent.id).toEqual('new-child-id');
+        expect(childComponent.valueStore.getOriginalProps()).toEqual({ name: 'new' });
+        expect(findChildren(test.component).map((child) => child.element)).toEqual([newChildElement]);
+        expect(findComponents(test.component, false, null).map((component) => component.element)).not.toContain(
+            originalChildElement
+        );
+>>>>>>> upstream/3.x
     });
 
     it('tracks various children correctly, even if position changes', async () => {

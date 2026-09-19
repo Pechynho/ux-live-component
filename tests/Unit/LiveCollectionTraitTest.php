@@ -23,7 +23,11 @@ use Symfony\UX\LiveComponent\LiveCollectionTrait;
 final class LiveCollectionTraitTest extends TestCase
 {
     #[DataProvider('provideAddedItems')]
+<<<<<<< HEAD
     public function testAddCollectionItem(array $postedFormData, string $collectionFieldName, array $expectedFormData)
+=======
+    public function testAddCollectionItem(array $postedFormData, string $collectionFieldName, array $expectedFormData): void
+>>>>>>> upstream/3.x
     {
         $component = $this->createComponent($postedFormData);
 
@@ -33,7 +37,11 @@ final class LiveCollectionTraitTest extends TestCase
     }
 
     #[DataProvider('provideRemovedItems')]
+<<<<<<< HEAD
     public function testRemoveCollectionItem(array $postedFormData, string $collectionFieldName, int $index, array $expectedFormData)
+=======
+    public function testRemoveCollectionItem(array $postedFormData, string $collectionFieldName, int $index, array $expectedFormData): void
+>>>>>>> upstream/3.x
     {
         $component = $this->createComponent($postedFormData);
 
@@ -209,7 +217,11 @@ final class LiveCollectionTraitTest extends TestCase
 
     private function createComponent(array $postedFormData)
     {
+<<<<<<< HEAD
         $form = $this->createMock(FormInterface::class);
+=======
+        $form = $this->createStub(FormInterface::class);
+>>>>>>> upstream/3.x
         $component = new class($form) {
             use LiveCollectionTrait;
 

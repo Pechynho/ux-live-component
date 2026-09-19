@@ -21,7 +21,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
     use HasBrowser;
     use LiveComponentTestHelper;
 
+<<<<<<< HEAD
     public function testItSetsDeferredTemplateIfLiveIdNotPassed()
+=======
+    public function testItSetsDeferredTemplateIfLiveIdNotPassed(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_deferred_component')
@@ -49,7 +53,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $this->assertSame('Long awaited data', $div->html());
     }
 
+<<<<<<< HEAD
     public function testItIncludesGivenTemplateWhileLoadingDeferredComponent()
+=======
+    public function testItIncludesGivenTemplateWhileLoadingDeferredComponent(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_deferred_component_with_template')
@@ -76,7 +84,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $this->assertStringContainsString('Long awaited data', $div->html());
     }
 
+<<<<<<< HEAD
     public function testItIncludesComponentTemplateBlockAsPlaceholder()
+=======
+    public function testItIncludesComponentTemplateBlockAsPlaceholder(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_deferred_component_with_placeholder')
@@ -87,7 +99,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $this->assertSame('<span class="loading-row"></span><span class="loading-row"></span>', trim($div->html()));
     }
 
+<<<<<<< HEAD
     public function testItDoesNotIncludesPlaceholderWhenRendered()
+=======
+    public function testItDoesNotIncludesPlaceholderWhenRendered(): void
+>>>>>>> upstream/3.x
     {
         $div = $this->browser()
             ->visit('/render-template/render_component_with_placeholder')
@@ -97,7 +113,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $this->assertStringNotContainsString('<span class="loading-row">', $div->html());
     }
 
+<<<<<<< HEAD
     public function testItAllowsToSetCustomLoadingHtmlTag()
+=======
+    public function testItAllowsToSetCustomLoadingHtmlTag(): void
+>>>>>>> upstream/3.x
     {
         $crawler = $this->browser()
             ->visit('/render-template/render_deferred_component_with_li_tag')
@@ -109,7 +129,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $this->assertSame(1, $crawler->filter('li')->count());
     }
 
+<<<<<<< HEAD
     public function testLazyComponentIsNotRendered()
+=======
+    public function testLazyComponentIsNotRendered(): void
+>>>>>>> upstream/3.x
     {
         $crawler = $this->browser()
             ->visit('/render-template/render_lazy_component')
@@ -124,7 +148,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
     }
 
     #[DataProvider('provideLoadingValues')]
+<<<<<<< HEAD
     public function testLazyComponentRenderingDependsOnLazyValue(mixed $lazy, bool $isRendered)
+=======
+    public function testLazyComponentRenderingDependsOnLazyValue(mixed $lazy, bool $isRendered): void
+>>>>>>> upstream/3.x
     {
         $crawler = $this->browser()
             ->visit('/render-template/render_lazy_component_with_value?loading='.$lazy)
@@ -143,7 +171,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         ];
     }
 
+<<<<<<< HEAD
     public function testLazyComponentIsRenderedLaterWithInitialData()
+=======
+    public function testLazyComponentIsRenderedLaterWithInitialData(): void
+>>>>>>> upstream/3.x
     {
         $crawler = $this->browser()
             ->visit('/render-template/render_lazy_component')
@@ -170,7 +202,11 @@ final class DeferLiveComponentSubscriberTest extends KernelTestCase
         $browser->assertElementAttributeContains('#count', 'value', '7');
     }
 
+<<<<<<< HEAD
     public function testSubscriberDoesNotHandleTwigComponent()
+=======
+    public function testSubscriberDoesNotHandleTwigComponent(): void
+>>>>>>> upstream/3.x
     {
         $browser = $this->browser()
             ->visit('/render-template/render_lazy_twig_component')

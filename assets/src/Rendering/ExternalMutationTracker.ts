@@ -16,6 +16,10 @@ export default class {
     private addedElements: Array<Element> = [];
     private removedElements: Array<Element> = [];
     private isStarted = false;
+<<<<<<< HEAD
+=======
+    private originalIds: Map<Element, string | null> = new Map();
+>>>>>>> upstream/3.x
 
     constructor(element: Element, shouldTrackChangeCallback: (element: Element) => boolean) {
         this.element = element;
@@ -49,6 +53,20 @@ export default class {
         return this.changedElements.has(element) ? (this.changedElements.get(element) as ElementChanges) : null;
     }
 
+<<<<<<< HEAD
+=======
+    /** IDs before external changes, used to match elements against the server HTML. */
+    getOriginalIds(): ReadonlyMap<Element, string | null> {
+        for (const element of this.originalIds.keys()) {
+            if (!this.element.contains(element)) {
+                this.originalIds.delete(element);
+            }
+        }
+
+        return this.originalIds;
+    }
+
+>>>>>>> upstream/3.x
     getAddedElements(): Element[] {
         return this.addedElements;
     }
@@ -235,6 +253,18 @@ export default class {
         const attributeName = mutation.attributeName as string;
         const element = mutation.target as Element;
 
+<<<<<<< HEAD
+=======
+        if (attributeName === 'id') {
+            if (!this.originalIds.has(element)) {
+                this.originalIds.set(element, mutation.oldValue);
+            }
+            if (element.getAttribute('id') === this.originalIds.get(element)) {
+                this.originalIds.delete(element);
+            }
+        }
+
+>>>>>>> upstream/3.x
         let oldValue = mutation.oldValue;
         let newValue = element.getAttribute(attributeName) as string;
         // try to normalize situations like: disabled="disabled"

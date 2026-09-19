@@ -16,7 +16,11 @@ use Symfony\UX\LiveComponent\Util\DehydratedProps;
 
 class DehydratedPropsTest extends TestCase
 {
+<<<<<<< HEAD
     public function testDataIsBuiltCorrectly()
+=======
+    public function testDataIsBuiltCorrectly(): void
+>>>>>>> upstream/3.x
     {
         $dehydratedProps = new DehydratedProps();
         $dehydratedProps->addPropValue('firstName', 'Ryan');
@@ -43,7 +47,11 @@ class DehydratedPropsTest extends TestCase
         $this->assertEquals($dehydratedProps->getProps(), $propsFromArray->getProps());
     }
 
+<<<<<<< HEAD
     public function testRemovePropValue()
+=======
+    public function testRemovePropValue(): void
+>>>>>>> upstream/3.x
     {
         $props = new DehydratedProps();
         $props->addPropValue('firstName', 'Ryan');
@@ -52,7 +60,11 @@ class DehydratedPropsTest extends TestCase
         $this->assertSame(['lastName' => 'Weaver'], $props->getProps());
     }
 
+<<<<<<< HEAD
     public function testGetAndHasPropValue()
+=======
+    public function testGetAndHasPropValue(): void
+>>>>>>> upstream/3.x
     {
         $props = new DehydratedProps();
         $props->addPropValue('firstName', 'Ryan');
@@ -63,7 +75,11 @@ class DehydratedPropsTest extends TestCase
         $this->assertNull($props->getPropValue('middleName'));
     }
 
+<<<<<<< HEAD
     public function testGetAndHasNestedPathValue()
+=======
+    public function testGetAndHasNestedPathValue(): void
+>>>>>>> upstream/3.x
     {
         $props = new DehydratedProps();
         $props->addPropValue('student', '11');
@@ -80,7 +96,11 @@ class DehydratedPropsTest extends TestCase
         $this->assertSame('Campfire Food', $props->getNestedPathValue('product', 'category.name'));
     }
 
+<<<<<<< HEAD
     public function testCreateFromUpdatedArray()
+=======
+    public function testCreateFromUpdatedArray(): void
+>>>>>>> upstream/3.x
     {
         $actual = DehydratedProps::createFromUpdatedArray([
             'isPublic' => true,
@@ -102,7 +122,11 @@ class DehydratedPropsTest extends TestCase
         $this->assertEquals($expected, $actual);
     }
 
+<<<<<<< HEAD
     public function testGetNestedPathsForProperty()
+=======
+    public function testGetNestedPathsForProperty(): void
+>>>>>>> upstream/3.x
     {
         $props = DehydratedProps::createFromUpdatedArray([
             'invoice.number' => '123',
@@ -118,7 +142,11 @@ class DehydratedPropsTest extends TestCase
         );
     }
 
+<<<<<<< HEAD
     public function testCalculateUnexpectedWritablePaths()
+=======
+    public function testCalculateUnexpectedWritablePaths(): void
+>>>>>>> upstream/3.x
     {
         $props = DehydratedProps::createFromUpdatedArray([
             'product.tags' => ['pretzels', 'nonsense'],

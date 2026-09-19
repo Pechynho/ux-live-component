@@ -327,12 +327,21 @@ final class LiveComponentExtension extends Extension implements PrependExtension
             return false;
         }
 
+<<<<<<< HEAD
         // check that FrameworkBundle 6.3 or higher is installed
+=======
+        // Before Symfony 8.2, FrameworkBundle provided the AssetMapper configuration.
+>>>>>>> upstream/3.x
         $bundlesMetadata = $container->getParameter('kernel.bundles_metadata');
         if (!isset($bundlesMetadata['FrameworkBundle'])) {
             return false;
         }
 
+<<<<<<< HEAD
         return is_file($bundlesMetadata['FrameworkBundle']['path'].'/Resources/config/asset_mapper.php');
+=======
+        return isset($bundlesMetadata['AssetMapperBundle'])
+            || is_file($bundlesMetadata['FrameworkBundle']['path'].'/Resources/config/asset_mapper.php');
+>>>>>>> upstream/3.x
     }
 }
