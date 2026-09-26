@@ -14,7 +14,6 @@ namespace Symfony\UX\LiveComponent\Tests\Functional\EventListener;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\BrowserKit\AbstractBrowser;
-use Symfony\UX\LiveComponent\LiveComponentHydrator;
 use Symfony\UX\LiveComponent\Tests\LiveComponentTestHelper;
 use Zenstruck\Browser\Test\HasBrowser;
 
@@ -32,7 +31,7 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
         AddLiveAttributesSubscriberTest::TODO_ITEM_DETERMINISTIC_PREFIX.'1' => '8AooEz36WYQyxj54BCaDm/jKbcdDdPDLaNO4/49bcQk=',
     ];
 
-    public function testItAllowsFullChildRenderOnMissingFingerprints()
+    public function testItAllowsFullChildRenderOnMissingFingerprints(): void
     {
         $this->browser()
             ->visit($this->buildUrlForTodoListComponent([]))
@@ -44,7 +43,7 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
         ;
     }
 
-    public function testItRendersEmptyElementOnMatchingFingerprintBasic()
+    public function testItRendersEmptyElementOnMatchingFingerprintBasic(): void
     {
         $this->browser()
             ->visit($this->buildUrlForTodoListComponent(self::$actualTodoItemFingerprints))
@@ -56,7 +55,7 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
         ;
     }
 
-    public function testItRendersEmptyElementOnMatchingFingerprintWithCustomDataLiveId()
+    public function testItRendersEmptyElementOnMatchingFingerprintWithCustomDataLiveId(): void
     {
         $fingerPrintsWithCustomLiveId = [];
         foreach (array_values(self::$actualTodoItemFingerprints) as $key => $fingerprintValue) {
@@ -73,7 +72,7 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
         ;
     }
 
-    public function testItRendersNewPropWhenFingerprintDoesNotMatch()
+    public function testItRendersNewPropWhenFingerprintDoesNotMatch(): void
     {
         $fingerprints = self::$actualTodoItemFingerprints;
         $fingerprints[AddLiveAttributesSubscriberTest::TODO_ITEM_DETERMINISTIC_PREFIX_EMBEDDED.'0'] = 'wrong fingerprint';
@@ -91,22 +90,22 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
                 // 1st renders empty
                 // fingerprint changed in 2nd & 3rd, so it renders new fingerprint + props
                 $this->assertStringContainsString(\sprintf(
-                    '<li id="%s0" data-live-preserve></li>',
+                    '<li id="%s0" data-live-preserve="true"></li>',
                     AddLiveAttributesSubscriberTest::TODO_ITEM_DETERMINISTIC_PREFIX
                 ), $content);
                 // new props are JUST the "textLength" + a checksum for it specifically
                 $this->assertStringContainsString(\sprintf(
-                    '<li data-live-name-value="todo_item" id="%s0" data-live-fingerprint-value="sMvvf7q68tz/Cuk+vDeisDiq+7YPWzT+WZFzI37dGHY=" data-live-props-updated-from-parent-value="{&quot;textLength&quot;:18,&quot;@checksum&quot;:&quot;ojeSrSewiB7nh7\/xJgEdQcYdY4B4CAisZL3DMOEUuuA=&quot;}" data-live-preserve></li>',
+                    '<li data-live-name-value="todo_item" id="%s0" data-live-fingerprint-value="sMvvf7q68tz/Cuk+vDeisDiq+7YPWzT+WZFzI37dGHY=" data-live-props-updated-from-parent-value="{&quot;textLength&quot;:18,&quot;@checksum&quot;:&quot;ojeSrSewiB7nh7\/xJgEdQcYdY4B4CAisZL3DMOEUuuA=&quot;}" data-live-preserve="true"></li>',
                     AddLiveAttributesSubscriberTest::TODO_ITEM_DETERMINISTIC_PREFIX_EMBEDDED,
                 ), $content);
                 $this->assertStringContainsString(\sprintf(
-                    '<li data-live-name-value="todo_item" id="%s1" data-live-fingerprint-value="8AooEz36WYQyxj54BCaDm/jKbcdDdPDLaNO4/49bcQk=" data-live-props-updated-from-parent-value="{&quot;textLength&quot;:10,&quot;@checksum&quot;:&quot;d54Y+mZ2hLyt4Ap8kfIy2ekPPvqjpqSy5dUJ7yjbEVk=&quot;}" data-live-preserve></li>',
+                    '<li data-live-name-value="todo_item" id="%s1" data-live-fingerprint-value="8AooEz36WYQyxj54BCaDm/jKbcdDdPDLaNO4/49bcQk=" data-live-props-updated-from-parent-value="{&quot;textLength&quot;:10,&quot;@checksum&quot;:&quot;d54Y+mZ2hLyt4Ap8kfIy2ekPPvqjpqSy5dUJ7yjbEVk=&quot;}" data-live-preserve="true"></li>',
                     AddLiveAttributesSubscriberTest::TODO_ITEM_DETERMINISTIC_PREFIX,
                 ), $content);
             });
     }
 
-    public function testItUsesKeysToRenderChildrenLiveIds()
+    public function testItUsesKeysToRenderChildrenLiveIds(): void
     {
         $fingerprintValues = array_values(self::$actualTodoItemFingerprints);
         $fingerprints = [];
@@ -134,7 +133,7 @@ final class InterceptChildComponentRenderSubscriberTest extends KernelTestCase
             ->assertContains('id="live-521026374-the-key0"')
             ->assertNotContains('key="the-key0"')
             ->visit($urlWithChangedFingerprints)
-            ->assertContains('<li id="live-521026374-the-key0" data-live-preserve></li>')
+            ->assertContains('<li id="live-521026374-the-key0" data-live-preserve="true"></li>')
             // this one is changed, so it renders a full element
             ->assertContains('<li data-live-name-value="todo_item" id="live-4172682817-the-key1"')
         ;

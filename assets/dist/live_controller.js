@@ -131,13 +131,23 @@ var Backend_default = class {
 // src/Backend/BackendResponse.ts
 var BackendResponse_default = class {
   constructor(response) {
+    this.download = null;
+    this.parsePromise = null;
     this.response = response;
   }
   async getBody() {
-    if (!this.body) {
-      this.body = await this.response.text();
+    if (!this.parsePromise) {
+      this.parsePromise = this.parse();
     }
+    await this.parsePromise;
     return this.body;
+  }
+  /**
+   * Synchronous on purpose, so the download can be triggered from the render path.
+   * Only meaningful once getBody() has resolved.
+   */
+  getDownload() {
+    return this.download;
   }
   getLiveUrl() {
     if (void 0 === this.liveUrl) {
@@ -145,7 +155,46 @@ var BackendResponse_default = class {
     }
     return this.liveUrl;
   }
+  /**
+   * A URL the browser downloads itself, rather than a file carried in this response.
+   */
+  getDownloadUrl() {
+    return this.response.headers.get("X-Live-Download-Url");
+  }
+  /**
+   * Whether the component is meant to leave the page after its final re-render.
+   */
+  isRemoved() {
+    return this.response.headers.has("X-Live-Remove");
+  }
+  async parse() {
+    const htmlLength = this.response.headers.get("X-Live-Html-Length");
+    if (null === htmlLength) {
+      this.body = await this.response.text();
+      return;
+    }
+    const buffer = await this.response.arrayBuffer();
+    const splitAt = Number.parseInt(htmlLength, 10);
+    this.body = new TextDecoder().decode(buffer.slice(0, splitAt));
+    this.download = {
+      // the filename is percent-encoded: headers carry ASCII only
+      filename: decodeFilename(this.response.headers.get("X-Live-Download-Filename")),
+      blob: new Blob([buffer.slice(splitAt)], {
+        type: this.response.headers.get("X-Live-Download-Type") ?? "application/octet-stream"
+      })
+    };
+  }
 };
+function decodeFilename(value) {
+  if (!value) {
+    return "download";
+  }
+  try {
+    return decodeURIComponent(value) || "download";
+  } catch {
+    return "download";
+  }
+}
 
 // src/Util/getElementAsTagText.ts
 function getElementAsTagText(element) {
@@ -349,6 +398,9 @@ function trimAll(str) {
   return str.replace(/[\s]+/g, " ").trim();
 }
 function normalizeModelName(model) {
+  if (!model.includes("[") && !model.includes("]")) {
+    return model;
+  }
   return model.replace(/\[]$/, "").split("[").map((s) => s.replace("]", "")).join(".");
 }
 
@@ -556,8 +608,9 @@ var HookManager_default = class {
 // node_modules/idiomorph/dist/idiomorph.esm.js
 var Idiomorph = (function() {
   "use strict";
-  let EMPTY_SET = /* @__PURE__ */ new Set();
-  let defaults = {
+  const noOp = () => {
+  };
+  const defaults = {
     morphStyle: "outerHTML",
     callbacks: {
       beforeNodeAdded: noOp,
@@ -570,237 +623,424 @@ var Idiomorph = (function() {
     },
     head: {
       style: "merge",
-      shouldPreserve: function(elt) {
-        return elt.getAttribute("im-preserve") === "true";
-      },
-      shouldReAppend: function(elt) {
-        return elt.getAttribute("im-re-append") === "true";
-      },
+      shouldPreserve: (elt) => elt.getAttribute("im-preserve") === "true",
+      shouldReAppend: (elt) => elt.getAttribute("im-re-append") === "true",
       shouldRemove: noOp,
       afterHeadMorphed: noOp
-    }
+    },
+    restoreFocus: true
   };
   function morph(oldNode, newContent, config = {}) {
-    if (oldNode instanceof Document) {
-      oldNode = oldNode.documentElement;
-    }
-    if (typeof newContent === "string") {
-      newContent = parseContent(newContent);
-    }
-    let normalizedContent = normalizeContent(newContent);
-    let ctx = createMorphContext(oldNode, normalizedContent, config);
-    return morphNormalizedContent(oldNode, normalizedContent, ctx);
+    oldNode = normalizeElement(oldNode);
+    const newNode = normalizeParent(newContent);
+    const ctx = createMorphContext(oldNode, newNode, config);
+    const morphedNodes = saveAndRestoreFocus(ctx, () => {
+      return withHeadBlocking(
+        ctx,
+        oldNode,
+        newNode,
+        /** @param {MorphContext} ctx */
+        (ctx2) => {
+          if (ctx2.morphStyle === "innerHTML") {
+            morphChildren(ctx2, oldNode, newNode);
+            return Array.from(oldNode.childNodes);
+          } else {
+            return morphOuterHTML(ctx2, oldNode, newNode);
+          }
+        }
+      );
+    });
+    ctx.pantry.remove();
+    return morphedNodes;
   }
-  function morphNormalizedContent(oldNode, normalizedNewContent, ctx) {
-    if (ctx.head.block) {
-      let oldHead = oldNode.querySelector("head");
-      let newHead = normalizedNewContent.querySelector("head");
-      if (oldHead && newHead) {
-        let promises = handleHeadElement(newHead, oldHead, ctx);
-        Promise.all(promises).then(function() {
-          morphNormalizedContent(oldNode, normalizedNewContent, Object.assign(ctx, {
-            head: {
-              block: false,
-              ignore: true
+  function morphOuterHTML(ctx, oldNode, newNode) {
+    const oldParent = normalizeParent(oldNode);
+    morphChildren(
+      ctx,
+      oldParent,
+      newNode,
+      // these two optional params are the secret sauce
+      oldNode,
+      // start point for iteration
+      oldNode.nextSibling
+      // end point for iteration
+    );
+    return Array.from(oldParent.childNodes);
+  }
+  function saveAndRestoreFocus(ctx, fn) {
+    if (!ctx.config.restoreFocus) return fn();
+    let activeElement = (
+      /** @type {HTMLInputElement|HTMLTextAreaElement|null} */
+      document.activeElement
+    );
+    if (!(activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement)) {
+      return fn();
+    }
+    const { id: activeElementId, selectionStart, selectionEnd } = activeElement;
+    const results = fn();
+    if (activeElementId && activeElementId !== document.activeElement?.getAttribute("id")) {
+      activeElement = ctx.target.querySelector(`[id="${activeElementId}"]`);
+      activeElement?.focus();
+    }
+    if (activeElement && !activeElement.selectionEnd && selectionEnd) {
+      activeElement.setSelectionRange(selectionStart, selectionEnd);
+    }
+    return results;
+  }
+  const morphChildren = /* @__PURE__ */ (function() {
+    function morphChildren2(ctx, oldParent, newParent, insertionPoint = null, endPoint = null) {
+      if (oldParent instanceof HTMLTemplateElement && newParent instanceof HTMLTemplateElement) {
+        oldParent = oldParent.content;
+        newParent = newParent.content;
+      }
+      insertionPoint || (insertionPoint = oldParent.firstChild);
+      for (const newChild of newParent.childNodes) {
+        if (insertionPoint && insertionPoint != endPoint) {
+          const bestMatch = findBestMatch(
+            ctx,
+            newChild,
+            insertionPoint,
+            endPoint
+          );
+          if (bestMatch) {
+            if (bestMatch !== insertionPoint) {
+              removeNodesBetween(ctx, insertionPoint, bestMatch);
             }
-          }));
-        });
-        return;
+            morphNode(bestMatch, newChild, ctx);
+            insertionPoint = bestMatch.nextSibling;
+            continue;
+          }
+        }
+        if (newChild instanceof Element) {
+          const newChildId = (
+            /** @type {String} */
+            newChild.getAttribute("id")
+          );
+          if (ctx.persistentIds.has(newChildId)) {
+            const movedChild = moveBeforeById(
+              oldParent,
+              newChildId,
+              insertionPoint,
+              ctx
+            );
+            morphNode(movedChild, newChild, ctx);
+            insertionPoint = movedChild.nextSibling;
+            continue;
+          }
+        }
+        const insertedNode = createNode(
+          oldParent,
+          newChild,
+          insertionPoint,
+          ctx
+        );
+        if (insertedNode) {
+          insertionPoint = insertedNode.nextSibling;
+        }
+      }
+      while (insertionPoint && insertionPoint != endPoint) {
+        const tempNode = insertionPoint;
+        insertionPoint = insertionPoint.nextSibling;
+        removeNode(ctx, tempNode);
       }
     }
-    if (ctx.morphStyle === "innerHTML") {
-      morphChildren(normalizedNewContent, oldNode, ctx);
-      return oldNode.children;
-    } else if (ctx.morphStyle === "outerHTML" || ctx.morphStyle == null) {
-      let bestMatch = findBestNodeMatch(normalizedNewContent, oldNode, ctx);
-      let previousSibling = bestMatch?.previousSibling;
-      let nextSibling = bestMatch?.nextSibling;
-      let morphedNode = morphOldNodeTo(oldNode, bestMatch, ctx);
-      if (bestMatch) {
-        return insertSiblings(previousSibling, morphedNode, nextSibling);
+    function createNode(oldParent, newChild, insertionPoint, ctx) {
+      if (ctx.callbacks.beforeNodeAdded(newChild) === false) return null;
+      if (ctx.idMap.has(newChild)) {
+        const newEmptyChild = document.createElement(
+          /** @type {Element} */
+          newChild.tagName
+        );
+        oldParent.insertBefore(newEmptyChild, insertionPoint);
+        morphNode(newEmptyChild, newChild, ctx);
+        ctx.callbacks.afterNodeAdded(newEmptyChild);
+        return newEmptyChild;
       } else {
-        return [];
+        const newClonedChild = document.importNode(newChild, true);
+        oldParent.insertBefore(newClonedChild, insertionPoint);
+        ctx.callbacks.afterNodeAdded(newClonedChild);
+        return newClonedChild;
       }
-    } else {
-      throw "Do not understand how to morph style " + ctx.morphStyle;
     }
-  }
-  function ignoreValueOfActiveElement(possibleActiveElement, ctx) {
-    return ctx.ignoreActiveValue && possibleActiveElement === document.activeElement;
-  }
-  function morphOldNodeTo(oldNode, newContent, ctx) {
-    if (ctx.ignoreActive && oldNode === document.activeElement) {
-    } else if (newContent == null) {
-      if (ctx.callbacks.beforeNodeRemoved(oldNode) === false) return oldNode;
-      oldNode.remove();
-      ctx.callbacks.afterNodeRemoved(oldNode);
-      return null;
-    } else if (!isSoftMatch(oldNode, newContent)) {
-      if (ctx.callbacks.beforeNodeRemoved(oldNode) === false) return oldNode;
-      if (ctx.callbacks.beforeNodeAdded(newContent) === false) return oldNode;
-      oldNode.parentElement.replaceChild(newContent, oldNode);
-      ctx.callbacks.afterNodeAdded(newContent);
-      ctx.callbacks.afterNodeRemoved(oldNode);
-      return newContent;
-    } else {
-      if (ctx.callbacks.beforeNodeMorphed(oldNode, newContent) === false) return oldNode;
+    const findBestMatch = /* @__PURE__ */ (function() {
+      function findBestMatch2(ctx, node, startPoint, endPoint) {
+        let softMatch = null;
+        let nextSibling = node.nextSibling;
+        let siblingSoftMatchCount = 0;
+        let cursor = startPoint;
+        while (cursor && cursor != endPoint) {
+          if (isSoftMatch(cursor, node)) {
+            if (isIdSetMatch(ctx, cursor, node)) {
+              return cursor;
+            }
+            if (softMatch === null) {
+              if (!ctx.idMap.has(cursor)) {
+                softMatch = cursor;
+              }
+            }
+          }
+          if (softMatch === null && nextSibling && isSoftMatch(cursor, nextSibling)) {
+            siblingSoftMatchCount++;
+            nextSibling = nextSibling.nextSibling;
+            if (siblingSoftMatchCount >= 2) {
+              softMatch = void 0;
+            }
+          }
+          if (ctx.activeElementAndParents.includes(cursor)) break;
+          cursor = cursor.nextSibling;
+        }
+        return softMatch || null;
+      }
+      function isIdSetMatch(ctx, oldNode, newNode) {
+        let oldSet = ctx.idMap.get(oldNode);
+        let newSet = ctx.idMap.get(newNode);
+        if (!newSet || !oldSet) return false;
+        for (const id of oldSet) {
+          if (newSet.has(id)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function isSoftMatch(oldNode, newNode) {
+        const oldElt = (
+          /** @type {Element} */
+          oldNode
+        );
+        const newElt = (
+          /** @type {Element} */
+          newNode
+        );
+        return oldElt.nodeType === newElt.nodeType && oldElt.tagName === newElt.tagName && // If oldElt has an `id` with possible state and it doesn't match newElt.id then avoid morphing.
+        // We'll still match an anonymous node with an IDed newElt, though, because if it got this far,
+        // its not persistent, and new nodes can't have any hidden state.
+        // We can't use .id because of form input shadowing, and we can't count on .getAttribute's presence because it could be a document-fragment
+        (!oldElt.getAttribute?.("id") || oldElt.getAttribute?.("id") === newElt.getAttribute?.("id"));
+      }
+      return findBestMatch2;
+    })();
+    function removeNode(ctx, node) {
+      if (ctx.idMap.has(node)) {
+        moveBefore(ctx.pantry, node, null);
+      } else {
+        if (ctx.callbacks.beforeNodeRemoved(node) === false) return;
+        node.parentNode?.removeChild(node);
+        ctx.callbacks.afterNodeRemoved(node);
+      }
+    }
+    function removeNodesBetween(ctx, startInclusive, endExclusive) {
+      let cursor = startInclusive;
+      while (cursor && cursor !== endExclusive) {
+        let tempNode = (
+          /** @type {Node} */
+          cursor
+        );
+        cursor = cursor.nextSibling;
+        removeNode(ctx, tempNode);
+      }
+      return cursor;
+    }
+    function moveBeforeById(parentNode, id, after, ctx) {
+      const target = (
+        /** @type {Element} - will always be found */
+        // ctx.target.id unsafe because of form input shadowing
+        // ctx.target could be a document fragment which doesn't have `getAttribute`
+        ctx.target.getAttribute?.("id") === id && ctx.target || ctx.target.querySelector(`[id="${id}"]`) || ctx.pantry.querySelector(`[id="${id}"]`)
+      );
+      removeElementFromAncestorsIdMaps(target, ctx);
+      moveBefore(parentNode, target, after);
+      return target;
+    }
+    function removeElementFromAncestorsIdMaps(element, ctx) {
+      const id = (
+        /** @type {String} */
+        element.getAttribute("id")
+      );
+      while (element = element.parentNode) {
+        let idSet = ctx.idMap.get(element);
+        if (idSet) {
+          idSet.delete(id);
+          if (!idSet.size) {
+            ctx.idMap.delete(element);
+          }
+        }
+      }
+    }
+    function moveBefore(parentNode, element, after) {
+      if (parentNode.moveBefore) {
+        try {
+          parentNode.moveBefore(element, after);
+        } catch (e) {
+          parentNode.insertBefore(element, after);
+        }
+      } else {
+        parentNode.insertBefore(element, after);
+      }
+    }
+    return morphChildren2;
+  })();
+  const morphNode = /* @__PURE__ */ (function() {
+    function morphNode2(oldNode, newContent, ctx) {
+      if (ctx.ignoreActive && oldNode === document.activeElement) {
+        return null;
+      }
+      if (ctx.callbacks.beforeNodeMorphed(oldNode, newContent) === false) {
+        return oldNode;
+      }
       if (oldNode instanceof HTMLHeadElement && ctx.head.ignore) {
       } else if (oldNode instanceof HTMLHeadElement && ctx.head.style !== "morph") {
-        handleHeadElement(newContent, oldNode, ctx);
+        handleHeadElement(
+          oldNode,
+          /** @type {HTMLHeadElement} */
+          newContent,
+          ctx
+        );
       } else {
-        syncNodeFrom(newContent, oldNode, ctx);
+        morphAttributes(oldNode, newContent, ctx);
         if (!ignoreValueOfActiveElement(oldNode, ctx)) {
-          morphChildren(newContent, oldNode, ctx);
+          morphChildren(ctx, oldNode, newContent);
         }
       }
       ctx.callbacks.afterNodeMorphed(oldNode, newContent);
       return oldNode;
     }
-  }
-  function morphChildren(newParent, oldParent, ctx) {
-    let nextNewChild = newParent.firstChild;
-    let insertionPoint = oldParent.firstChild;
-    let newChild;
-    while (nextNewChild) {
-      newChild = nextNewChild;
-      nextNewChild = newChild.nextSibling;
-      if (insertionPoint == null) {
-        if (ctx.callbacks.beforeNodeAdded(newChild) === false) return;
-        oldParent.appendChild(newChild);
-        ctx.callbacks.afterNodeAdded(newChild);
-        removeIdsFromConsideration(ctx, newChild);
-        continue;
-      }
-      if (isIdSetMatch(newChild, insertionPoint, ctx)) {
-        morphOldNodeTo(insertionPoint, newChild, ctx);
-        insertionPoint = insertionPoint.nextSibling;
-        removeIdsFromConsideration(ctx, newChild);
-        continue;
-      }
-      let idSetMatch = findIdSetMatch(newParent, oldParent, newChild, insertionPoint, ctx);
-      if (idSetMatch) {
-        insertionPoint = removeNodesBetween(insertionPoint, idSetMatch, ctx);
-        morphOldNodeTo(idSetMatch, newChild, ctx);
-        removeIdsFromConsideration(ctx, newChild);
-        continue;
-      }
-      let softMatch = findSoftMatch(newParent, oldParent, newChild, insertionPoint, ctx);
-      if (softMatch) {
-        insertionPoint = removeNodesBetween(insertionPoint, softMatch, ctx);
-        morphOldNodeTo(softMatch, newChild, ctx);
-        removeIdsFromConsideration(ctx, newChild);
-        continue;
-      }
-      if (ctx.callbacks.beforeNodeAdded(newChild) === false) return;
-      oldParent.insertBefore(newChild, insertionPoint);
-      ctx.callbacks.afterNodeAdded(newChild);
-      removeIdsFromConsideration(ctx, newChild);
-    }
-    while (insertionPoint !== null) {
-      let tempNode = insertionPoint;
-      insertionPoint = insertionPoint.nextSibling;
-      removeNode(tempNode, ctx);
-    }
-  }
-  function ignoreAttribute(attr, to, updateType, ctx) {
-    if (attr === "value" && ctx.ignoreActiveValue && to === document.activeElement) {
-      return true;
-    }
-    return ctx.callbacks.beforeAttributeUpdated(attr, to, updateType) === false;
-  }
-  function syncNodeFrom(from, to, ctx) {
-    let type = from.nodeType;
-    if (type === 1) {
-      const fromAttributes = from.attributes;
-      const toAttributes = to.attributes;
-      for (const fromAttribute of fromAttributes) {
-        if (ignoreAttribute(fromAttribute.name, to, "update", ctx)) {
-          continue;
+    function morphAttributes(oldNode, newNode, ctx) {
+      let type = newNode.nodeType;
+      if (type === 1) {
+        const oldElt = (
+          /** @type {Element} */
+          oldNode
+        );
+        const newElt = (
+          /** @type {Element} */
+          newNode
+        );
+        const oldAttributes = oldElt.attributes;
+        const newAttributes = newElt.attributes;
+        for (const newAttribute of newAttributes) {
+          if (ignoreAttribute(newAttribute.name, oldElt, "update", ctx)) {
+            continue;
+          }
+          if (oldElt.getAttribute(newAttribute.name) !== newAttribute.value) {
+            oldElt.setAttribute(newAttribute.name, newAttribute.value);
+          }
         }
-        if (to.getAttribute(fromAttribute.name) !== fromAttribute.value) {
-          to.setAttribute(fromAttribute.name, fromAttribute.value);
+        for (let i = oldAttributes.length - 1; 0 <= i; i--) {
+          const oldAttribute = oldAttributes[i];
+          if (!oldAttribute) continue;
+          if (!newElt.hasAttribute(oldAttribute.name)) {
+            if (ignoreAttribute(oldAttribute.name, oldElt, "remove", ctx)) {
+              continue;
+            }
+            oldElt.removeAttribute(oldAttribute.name);
+          }
+        }
+        if (!ignoreValueOfActiveElement(oldElt, ctx)) {
+          syncInputValue(oldElt, newElt, ctx);
         }
       }
-      for (let i = toAttributes.length - 1; 0 <= i; i--) {
-        const toAttribute = toAttributes[i];
-        if (ignoreAttribute(toAttribute.name, to, "remove", ctx)) {
-          continue;
-        }
-        if (!from.hasAttribute(toAttribute.name)) {
-          to.removeAttribute(toAttribute.name);
+      if (type === 8 || type === 3) {
+        if (oldNode.nodeValue !== newNode.nodeValue) {
+          oldNode.nodeValue = newNode.nodeValue;
         }
       }
     }
-    if (type === 8 || type === 3) {
-      if (to.nodeValue !== from.nodeValue) {
-        to.nodeValue = from.nodeValue;
+    function syncInputValue(oldElement, newElement, ctx) {
+      if (oldElement instanceof HTMLInputElement && newElement instanceof HTMLInputElement && newElement.type !== "file") {
+        let newValue = newElement.value;
+        let oldValue = oldElement.value;
+        syncBooleanAttribute(oldElement, newElement, "checked", ctx);
+        syncBooleanAttribute(oldElement, newElement, "disabled", ctx);
+        if (!newElement.hasAttribute("value")) {
+          if (!ignoreAttribute("value", oldElement, "remove", ctx)) {
+            oldElement.value = "";
+            oldElement.removeAttribute("value");
+          }
+        } else if (oldValue !== newValue) {
+          if (!ignoreAttribute("value", oldElement, "update", ctx)) {
+            oldElement.setAttribute("value", newValue);
+            oldElement.value = newValue;
+          }
+        }
+      } else if (oldElement instanceof HTMLOptionElement && newElement instanceof HTMLOptionElement) {
+        syncBooleanAttribute(oldElement, newElement, "selected", ctx);
+      } else if (oldElement instanceof HTMLTextAreaElement && newElement instanceof HTMLTextAreaElement) {
+        let newValue = newElement.value;
+        let oldValue = oldElement.value;
+        if (ignoreAttribute("value", oldElement, "update", ctx)) {
+          return;
+        }
+        if (newValue !== oldValue) {
+          oldElement.value = newValue;
+        }
+        if (oldElement.firstChild && oldElement.firstChild.nodeValue !== newValue) {
+          oldElement.firstChild.nodeValue = newValue;
+        }
       }
     }
-    if (!ignoreValueOfActiveElement(to, ctx)) {
-      syncInputValue(from, to, ctx);
-    }
-  }
-  function syncBooleanAttribute(from, to, attributeName, ctx) {
-    if (from[attributeName] !== to[attributeName]) {
-      let ignoreUpdate = ignoreAttribute(attributeName, to, "update", ctx);
-      if (!ignoreUpdate) {
-        to[attributeName] = from[attributeName];
-      }
-      if (from[attributeName]) {
+    function syncBooleanAttribute(oldElement, newElement, attributeName, ctx) {
+      const newLiveValue = newElement[attributeName], oldLiveValue = oldElement[attributeName];
+      if (newLiveValue !== oldLiveValue) {
+        const ignoreUpdate = ignoreAttribute(
+          attributeName,
+          oldElement,
+          "update",
+          ctx
+        );
         if (!ignoreUpdate) {
-          to.setAttribute(attributeName, from[attributeName]);
+          oldElement[attributeName] = newElement[attributeName];
         }
-      } else {
-        if (!ignoreAttribute(attributeName, to, "remove", ctx)) {
-          to.removeAttribute(attributeName);
+        if (newLiveValue) {
+          if (!ignoreUpdate) {
+            oldElement.setAttribute(attributeName, "");
+          }
+        } else {
+          if (!ignoreAttribute(attributeName, oldElement, "remove", ctx)) {
+            oldElement.removeAttribute(attributeName);
+          }
         }
       }
     }
-  }
-  function syncInputValue(from, to, ctx) {
-    if (from instanceof HTMLInputElement && to instanceof HTMLInputElement && from.type !== "file") {
-      let fromValue = from.value;
-      let toValue = to.value;
-      syncBooleanAttribute(from, to, "checked", ctx);
-      syncBooleanAttribute(from, to, "disabled", ctx);
-      if (!from.hasAttribute("value")) {
-        if (!ignoreAttribute("value", to, "remove", ctx)) {
-          to.value = "";
-          to.removeAttribute("value");
-        }
-      } else if (fromValue !== toValue) {
-        if (!ignoreAttribute("value", to, "update", ctx)) {
-          to.setAttribute("value", fromValue);
-          to.value = fromValue;
-        }
+    function ignoreAttribute(attr, element, updateType, ctx) {
+      if (attr === "value" && ctx.ignoreActiveValue && element === document.activeElement) {
+        return true;
       }
-    } else if (from instanceof HTMLOptionElement) {
-      syncBooleanAttribute(from, to, "selected", ctx);
-    } else if (from instanceof HTMLTextAreaElement && to instanceof HTMLTextAreaElement) {
-      let fromValue = from.value;
-      let toValue = to.value;
-      if (ignoreAttribute("value", to, "update", ctx)) {
-        return;
-      }
-      if (fromValue !== toValue) {
-        to.value = fromValue;
-      }
-      if (to.firstChild && to.firstChild.nodeValue !== fromValue) {
-        to.firstChild.nodeValue = fromValue;
+      return ctx.callbacks.beforeAttributeUpdated(attr, element, updateType) === false;
+    }
+    function ignoreValueOfActiveElement(possibleActiveElement, ctx) {
+      return !!ctx.ignoreActiveValue && possibleActiveElement === document.activeElement && possibleActiveElement !== document.body;
+    }
+    return morphNode2;
+  })();
+  function withHeadBlocking(ctx, oldNode, newNode, callback) {
+    if (ctx.head.block) {
+      const oldHead = oldNode.querySelector("head");
+      const newHead = newNode.querySelector("head");
+      if (oldHead && newHead) {
+        const promises = handleHeadElement(oldHead, newHead, ctx);
+        return Promise.all(promises).then(() => {
+          const newCtx = Object.assign(ctx, {
+            head: {
+              block: false,
+              ignore: true
+            }
+          });
+          return callback(newCtx);
+        });
       }
     }
+    return callback(ctx);
   }
-  function handleHeadElement(newHeadTag, currentHead, ctx) {
+  function handleHeadElement(oldHead, newHead, ctx) {
     let added = [];
     let removed = [];
     let preserved = [];
     let nodesToAppend = [];
-    let headMergeStyle = ctx.head.style;
     let srcToNewHeadNodes = /* @__PURE__ */ new Map();
-    for (const newHeadChild of newHeadTag.children) {
+    for (const newHeadChild of newHead.children) {
       srcToNewHeadNodes.set(newHeadChild.outerHTML, newHeadChild);
     }
-    for (const currentHeadElt of currentHead.children) {
+    for (const currentHeadElt of oldHead.children) {
       let inNewContent = srcToNewHeadNodes.has(currentHeadElt.outerHTML);
       let isReAppended = ctx.head.shouldReAppend(currentHeadElt);
       let isPreserved = ctx.head.shouldPreserve(currentHeadElt);
@@ -812,7 +1052,7 @@ var Idiomorph = (function() {
           preserved.push(currentHeadElt);
         }
       } else {
-        if (headMergeStyle === "append") {
+        if (ctx.head.style === "append") {
           if (isReAppended) {
             removed.push(currentHeadElt);
             nodesToAppend.push(currentHeadElt);
@@ -825,15 +1065,15 @@ var Idiomorph = (function() {
       }
     }
     nodesToAppend.push(...srcToNewHeadNodes.values());
-    log("to append: ", nodesToAppend);
     let promises = [];
     for (const newNode of nodesToAppend) {
-      log("adding: ", newNode);
-      let newElt = document.createRange().createContextualFragment(newNode.outerHTML).firstChild;
-      log(newElt);
+      let newElt = (
+        /** @type {ChildNode} */
+        document.createRange().createContextualFragment(newNode.outerHTML).firstChild
+      );
       if (ctx.callbacks.beforeNodeAdded(newElt) !== false) {
-        if (newElt.href || newElt.src) {
-          let resolve = null;
+        if ("href" in newElt && newElt.href || "src" in newElt && newElt.src) {
+          let resolve;
           let promise = new Promise(function(_resolve) {
             resolve = _resolve;
           });
@@ -842,257 +1082,277 @@ var Idiomorph = (function() {
           });
           promises.push(promise);
         }
-        currentHead.appendChild(newElt);
+        oldHead.appendChild(newElt);
         ctx.callbacks.afterNodeAdded(newElt);
         added.push(newElt);
       }
     }
     for (const removedElement of removed) {
       if (ctx.callbacks.beforeNodeRemoved(removedElement) !== false) {
-        currentHead.removeChild(removedElement);
+        oldHead.removeChild(removedElement);
         ctx.callbacks.afterNodeRemoved(removedElement);
       }
     }
-    ctx.head.afterHeadMorphed(currentHead, { added, kept: preserved, removed });
+    ctx.head.afterHeadMorphed(oldHead, {
+      added,
+      kept: preserved,
+      removed
+    });
     return promises;
   }
-  function log() {
-  }
-  function noOp() {
-  }
-  function mergeDefaults(config) {
-    let finalConfig = {};
-    Object.assign(finalConfig, defaults);
-    Object.assign(finalConfig, config);
-    finalConfig.callbacks = {};
-    Object.assign(finalConfig.callbacks, defaults.callbacks);
-    Object.assign(finalConfig.callbacks, config.callbacks);
-    finalConfig.head = {};
-    Object.assign(finalConfig.head, defaults.head);
-    Object.assign(finalConfig.head, config.head);
-    return finalConfig;
-  }
-  function createMorphContext(oldNode, newContent, config) {
-    config = mergeDefaults(config);
-    return {
-      target: oldNode,
-      newContent,
-      config,
-      morphStyle: config.morphStyle,
-      ignoreActive: config.ignoreActive,
-      ignoreActiveValue: config.ignoreActiveValue,
-      idMap: createIdMap(oldNode, newContent),
-      deadIds: /* @__PURE__ */ new Set(),
-      callbacks: config.callbacks,
-      head: config.head
-    };
-  }
-  function isIdSetMatch(node1, node2, ctx) {
-    if (node1 == null || node2 == null) {
-      return false;
-    }
-    if (node1.nodeType === node2.nodeType && node1.tagName === node2.tagName) {
-      if (node1.id !== "" && node1.id === node2.id) {
-        return true;
-      } else {
-        return getIdIntersectionCount(ctx, node1, node2) > 0;
+  const createMorphContext = /* @__PURE__ */ (function() {
+    function createMorphContext2(oldNode, newContent, config) {
+      const { persistentIds, idMap } = createIdMaps(oldNode, newContent);
+      const mergedConfig = mergeDefaults(config);
+      const morphStyle = mergedConfig.morphStyle || "outerHTML";
+      if (!["innerHTML", "outerHTML"].includes(morphStyle)) {
+        throw `Do not understand how to morph style ${morphStyle}`;
       }
+      return {
+        target: oldNode,
+        newContent,
+        config: mergedConfig,
+        morphStyle,
+        ignoreActive: mergedConfig.ignoreActive,
+        ignoreActiveValue: mergedConfig.ignoreActiveValue,
+        restoreFocus: mergedConfig.restoreFocus,
+        idMap,
+        persistentIds,
+        pantry: createPantry(),
+        activeElementAndParents: createActiveElementAndParents(oldNode),
+        callbacks: mergedConfig.callbacks,
+        head: mergedConfig.head
+      };
     }
-    return false;
-  }
-  function isSoftMatch(node1, node2) {
-    if (node1 == null || node2 == null) {
-      return false;
+    function mergeDefaults(config) {
+      let finalConfig = Object.assign({}, defaults);
+      Object.assign(finalConfig, config);
+      finalConfig.callbacks = Object.assign(
+        {},
+        defaults.callbacks,
+        config.callbacks
+      );
+      finalConfig.head = Object.assign({}, defaults.head, config.head);
+      return finalConfig;
     }
-    return node1.nodeType === node2.nodeType && node1.tagName === node2.tagName;
-  }
-  function removeNodesBetween(startInclusive, endExclusive, ctx) {
-    while (startInclusive !== endExclusive) {
-      let tempNode = startInclusive;
-      startInclusive = startInclusive.nextSibling;
-      removeNode(tempNode, ctx);
+    function createPantry() {
+      const pantry = document.createElement("div");
+      pantry.hidden = true;
+      document.body.insertAdjacentElement("afterend", pantry);
+      return pantry;
     }
-    removeIdsFromConsideration(ctx, endExclusive);
-    return endExclusive.nextSibling;
-  }
-  function findIdSetMatch(newContent, oldParent, newChild, insertionPoint, ctx) {
-    let newChildPotentialIdCount = getIdIntersectionCount(ctx, newChild, oldParent);
-    let potentialMatch = null;
-    if (newChildPotentialIdCount > 0) {
-      let potentialMatch2 = insertionPoint;
-      let otherMatchCount = 0;
-      while (potentialMatch2 != null) {
-        if (isIdSetMatch(newChild, potentialMatch2, ctx)) {
-          return potentialMatch2;
-        }
-        otherMatchCount += getIdIntersectionCount(ctx, potentialMatch2, newContent);
-        if (otherMatchCount > newChildPotentialIdCount) {
-          return null;
-        }
-        potentialMatch2 = potentialMatch2.nextSibling;
-      }
-    }
-    return potentialMatch;
-  }
-  function findSoftMatch(newContent, oldParent, newChild, insertionPoint, ctx) {
-    let potentialSoftMatch = insertionPoint;
-    let nextSibling = newChild.nextSibling;
-    let siblingSoftMatchCount = 0;
-    while (potentialSoftMatch != null) {
-      if (getIdIntersectionCount(ctx, potentialSoftMatch, newContent) > 0) {
-        return null;
-      }
-      if (isSoftMatch(newChild, potentialSoftMatch)) {
-        return potentialSoftMatch;
-      }
-      if (isSoftMatch(nextSibling, potentialSoftMatch)) {
-        siblingSoftMatchCount++;
-        nextSibling = nextSibling.nextSibling;
-        if (siblingSoftMatchCount >= 2) {
-          return null;
+    function createActiveElementAndParents(oldNode) {
+      let activeElementAndParents = [];
+      let elt = document.activeElement;
+      if (elt?.tagName !== "BODY" && oldNode.contains(elt)) {
+        while (elt) {
+          activeElementAndParents.push(elt);
+          if (elt === oldNode) break;
+          elt = elt.parentElement;
         }
       }
-      potentialSoftMatch = potentialSoftMatch.nextSibling;
+      return activeElementAndParents;
     }
-    return potentialSoftMatch;
-  }
-  function parseContent(newContent) {
-    let parser = new DOMParser();
-    let contentWithSvgsRemoved = newContent.replace(/<svg(\s[^>]*>|>)([\s\S]*?)<\/svg>/gim, "");
-    if (contentWithSvgsRemoved.match(/<\/html>/) || contentWithSvgsRemoved.match(/<\/head>/) || contentWithSvgsRemoved.match(/<\/body>/)) {
-      let content = parser.parseFromString(newContent, "text/html");
-      if (contentWithSvgsRemoved.match(/<\/html>/)) {
-        content.generatedByIdiomorph = true;
-        return content;
-      } else {
-        let htmlElement = content.firstChild;
-        if (htmlElement) {
-          htmlElement.generatedByIdiomorph = true;
-          return htmlElement;
+    function findIdElements(root) {
+      let elements = Array.from(root.querySelectorAll("[id]"));
+      if (root.getAttribute?.("id")) {
+        elements.push(root);
+      }
+      return elements;
+    }
+    function populateIdMapWithTree(idMap, persistentIds, root, elements) {
+      for (const elt of elements) {
+        const id = (
+          /** @type {String} */
+          elt.getAttribute("id")
+        );
+        if (persistentIds.has(id)) {
+          let current = elt;
+          while (current) {
+            let idSet = idMap.get(current);
+            if (idSet == null) {
+              idSet = /* @__PURE__ */ new Set();
+              idMap.set(current, idSet);
+            }
+            idSet.add(id);
+            if (current === root) break;
+            current = current.parentElement;
+          }
+        }
+      }
+    }
+    function createIdMaps(oldContent, newContent) {
+      const oldIdElements = findIdElements(oldContent);
+      const newIdElements = findIdElements(newContent);
+      const persistentIds = createPersistentIds(oldIdElements, newIdElements);
+      let idMap = /* @__PURE__ */ new Map();
+      populateIdMapWithTree(idMap, persistentIds, oldContent, oldIdElements);
+      const newRoot = newContent.__idiomorphRoot || newContent;
+      populateIdMapWithTree(idMap, persistentIds, newRoot, newIdElements);
+      return { persistentIds, idMap };
+    }
+    function createPersistentIds(oldIdElements, newIdElements) {
+      let duplicateIds = /* @__PURE__ */ new Set();
+      let oldIdTagNameMap = /* @__PURE__ */ new Map();
+      for (const { id, tagName } of oldIdElements) {
+        if (oldIdTagNameMap.has(id)) {
+          duplicateIds.add(id);
         } else {
-          return null;
+          oldIdTagNameMap.set(id, tagName);
         }
       }
-    } else {
-      let responseDoc = parser.parseFromString("<body><template>" + newContent + "</template></body>", "text/html");
-      let content = responseDoc.body.querySelector("template").content;
-      content.generatedByIdiomorph = true;
-      return content;
-    }
-  }
-  function normalizeContent(newContent) {
-    if (newContent == null) {
-      const dummyParent = document.createElement("div");
-      return dummyParent;
-    } else if (newContent.generatedByIdiomorph) {
-      return newContent;
-    } else if (newContent instanceof Node) {
-      const dummyParent = document.createElement("div");
-      dummyParent.append(newContent);
-      return dummyParent;
-    } else {
-      const dummyParent = document.createElement("div");
-      for (const elt of [...newContent]) {
-        dummyParent.append(elt);
-      }
-      return dummyParent;
-    }
-  }
-  function insertSiblings(previousSibling, morphedNode, nextSibling) {
-    let stack = [];
-    let added = [];
-    while (previousSibling != null) {
-      stack.push(previousSibling);
-      previousSibling = previousSibling.previousSibling;
-    }
-    while (stack.length > 0) {
-      let node = stack.pop();
-      added.push(node);
-      morphedNode.parentElement.insertBefore(node, morphedNode);
-    }
-    added.push(morphedNode);
-    while (nextSibling != null) {
-      stack.push(nextSibling);
-      added.push(nextSibling);
-      nextSibling = nextSibling.nextSibling;
-    }
-    while (stack.length > 0) {
-      morphedNode.parentElement.insertBefore(stack.pop(), morphedNode.nextSibling);
-    }
-    return added;
-  }
-  function findBestNodeMatch(newContent, oldNode, ctx) {
-    let currentElement;
-    currentElement = newContent.firstChild;
-    let bestElement = currentElement;
-    let score = 0;
-    while (currentElement) {
-      let newScore = scoreElement(currentElement, oldNode, ctx);
-      if (newScore > score) {
-        bestElement = currentElement;
-        score = newScore;
-      }
-      currentElement = currentElement.nextSibling;
-    }
-    return bestElement;
-  }
-  function scoreElement(node1, node2, ctx) {
-    if (isSoftMatch(node1, node2)) {
-      return 0.5 + getIdIntersectionCount(ctx, node1, node2);
-    }
-    return 0;
-  }
-  function removeNode(tempNode, ctx) {
-    removeIdsFromConsideration(ctx, tempNode);
-    if (ctx.callbacks.beforeNodeRemoved(tempNode) === false) return;
-    tempNode.remove();
-    ctx.callbacks.afterNodeRemoved(tempNode);
-  }
-  function isIdInConsideration(ctx, id) {
-    return !ctx.deadIds.has(id);
-  }
-  function idIsWithinNode(ctx, id, targetNode) {
-    let idSet = ctx.idMap.get(targetNode) || EMPTY_SET;
-    return idSet.has(id);
-  }
-  function removeIdsFromConsideration(ctx, node) {
-    let idSet = ctx.idMap.get(node) || EMPTY_SET;
-    for (const id of idSet) {
-      ctx.deadIds.add(id);
-    }
-  }
-  function getIdIntersectionCount(ctx, node1, node2) {
-    let sourceSet = ctx.idMap.get(node1) || EMPTY_SET;
-    let matchCount = 0;
-    for (const id of sourceSet) {
-      if (isIdInConsideration(ctx, id) && idIsWithinNode(ctx, id, node2)) {
-        ++matchCount;
-      }
-    }
-    return matchCount;
-  }
-  function populateIdMapForNode(node, idMap) {
-    let nodeParent = node.parentElement;
-    let idElements = node.querySelectorAll("[id]");
-    for (const elt of idElements) {
-      let current = elt;
-      while (current !== nodeParent && current != null) {
-        let idSet = idMap.get(current);
-        if (idSet == null) {
-          idSet = /* @__PURE__ */ new Set();
-          idMap.set(current, idSet);
+      let persistentIds = /* @__PURE__ */ new Set();
+      for (const { id, tagName } of newIdElements) {
+        if (persistentIds.has(id)) {
+          duplicateIds.add(id);
+        } else if (oldIdTagNameMap.get(id) === tagName) {
+          persistentIds.add(id);
         }
-        idSet.add(elt.id);
-        current = current.parentElement;
+      }
+      for (const id of duplicateIds) {
+        persistentIds.delete(id);
+      }
+      return persistentIds;
+    }
+    return createMorphContext2;
+  })();
+  const { normalizeElement, normalizeParent } = /* @__PURE__ */ (function() {
+    const generatedByIdiomorph = /* @__PURE__ */ new WeakSet();
+    function normalizeElement2(content) {
+      if (content instanceof Document) {
+        return content.documentElement;
+      } else {
+        return content;
       }
     }
-  }
-  function createIdMap(oldContent, newContent) {
-    let idMap = /* @__PURE__ */ new Map();
-    populateIdMapForNode(oldContent, idMap);
-    populateIdMapForNode(newContent, idMap);
-    return idMap;
-  }
+    function normalizeParent2(newContent) {
+      if (newContent == null) {
+        return document.createElement("div");
+      } else if (typeof newContent === "string") {
+        return normalizeParent2(parseContent(newContent));
+      } else if (generatedByIdiomorph.has(
+        /** @type {Element} */
+        newContent
+      )) {
+        return (
+          /** @type {Element} */
+          newContent
+        );
+      } else if (newContent instanceof Node) {
+        if (newContent.parentNode) {
+          return (
+            /** @type {any} */
+            new SlicedParentNode(newContent)
+          );
+        } else {
+          const dummyParent = document.createElement("div");
+          dummyParent.append(newContent);
+          return dummyParent;
+        }
+      } else {
+        const dummyParent = document.createElement("div");
+        for (const elt of [...newContent]) {
+          dummyParent.append(elt);
+        }
+        return dummyParent;
+      }
+    }
+    class SlicedParentNode {
+      /** @param {Node} node */
+      constructor(node) {
+        this.originalNode = node;
+        this.realParentNode = /** @type {Element} */
+        node.parentNode;
+        this.previousSibling = node.previousSibling;
+        this.nextSibling = node.nextSibling;
+      }
+      /** @returns {Node[]} */
+      get childNodes() {
+        const nodes = [];
+        let cursor = this.previousSibling ? this.previousSibling.nextSibling : this.realParentNode.firstChild;
+        while (cursor && cursor != this.nextSibling) {
+          nodes.push(cursor);
+          cursor = cursor.nextSibling;
+        }
+        return nodes;
+      }
+      /**
+       * @param {string} selector
+       * @returns {Element[]}
+       */
+      querySelectorAll(selector) {
+        return this.childNodes.reduce(
+          (results, node) => {
+            if (node instanceof Element) {
+              if (node.matches(selector)) results.push(node);
+              const nodeList = node.querySelectorAll(selector);
+              for (let i = 0; i < nodeList.length; i++) {
+                results.push(nodeList[i]);
+              }
+            }
+            return results;
+          },
+          /** @type {Element[]} */
+          []
+        );
+      }
+      /**
+       * @param {Node} node
+       * @param {Node} referenceNode
+       * @returns {Node}
+       */
+      insertBefore(node, referenceNode) {
+        return this.realParentNode.insertBefore(node, referenceNode);
+      }
+      /**
+       * @param {Node} node
+       * @param {Node} referenceNode
+       * @returns {Node}
+       */
+      moveBefore(node, referenceNode) {
+        return this.realParentNode.moveBefore(node, referenceNode);
+      }
+      /**
+       * for later use with populateIdMapWithTree to halt upwards iteration
+       * @returns {Node}
+       */
+      get __idiomorphRoot() {
+        return this.originalNode;
+      }
+    }
+    function parseContent(newContent) {
+      let parser = new DOMParser();
+      let contentWithSvgsRemoved = newContent.replace(
+        /<svg(\s[^>]*>|>)([\s\S]*?)<\/svg>/gim,
+        ""
+      );
+      if (contentWithSvgsRemoved.match(/<\/html>/) || contentWithSvgsRemoved.match(/<\/head>/) || contentWithSvgsRemoved.match(/<\/body>/)) {
+        let content = parser.parseFromString(newContent, "text/html");
+        if (contentWithSvgsRemoved.match(/<\/html>/)) {
+          generatedByIdiomorph.add(content);
+          return content;
+        } else {
+          let htmlElement = content.firstChild;
+          if (htmlElement) {
+            generatedByIdiomorph.add(htmlElement);
+          }
+          return htmlElement;
+        }
+      } else {
+        let responseDoc = parser.parseFromString(
+          "<body><template>" + newContent + "</template></body>",
+          "text/html"
+        );
+        let content = (
+          /** @type {HTMLTemplateElement} */
+          responseDoc.body.querySelector("template").content
+        );
+        generatedByIdiomorph.add(content);
+        return content;
+      }
+    }
+    return { normalizeElement: normalizeElement2, normalizeParent: normalizeParent2 };
+  })();
   return {
     morph,
     defaults
@@ -1121,144 +1381,176 @@ var syncAttributes = (fromEl, toEl) => {
     toEl.setAttribute(attr.name, attr.value);
   }
 };
-function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, getElementValue, externalMutationTracker) {
-  const originalElementIdsToSwapAfter = [];
-  const originalElementsToPreserve = /* @__PURE__ */ new Map();
-  const handledPreserveIds = /* @__PURE__ */ new Set();
-  const elementsToNotifyPreserveRestored = [];
-  const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
-    const oldElement = originalElementsToPreserve.get(id);
-    if (!(oldElement instanceof HTMLElement)) {
-      throw new Error(`Original element with id ${id} not found`);
+var setId = (element, id) => {
+  if (id === null) {
+    element.removeAttribute("id");
+  } else {
+    element.setAttribute("id", id);
+  }
+};
+function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, getElementValue, externalMutationTracker, childComponents = []) {
+  const externallyChangedIds = /* @__PURE__ */ new Map();
+  try {
+    for (const [element, originalId] of externalMutationTracker.getOriginalIds()) {
+      externallyChangedIds.set(element, element.getAttribute("id"));
+      setId(element, originalId);
     }
-    originalElementIdsToSwapAfter.push(id);
-    handledPreserveIds.add(id);
-    if (!replaceWithClone) {
-      return null;
-    }
-    const clonedOldElement = cloneHTMLElement(oldElement);
-    oldElement.replaceWith(clonedOldElement);
-    return clonedOldElement;
-  };
-  rootToElement.querySelectorAll("[data-live-preserve]").forEach((newElement) => {
-    const id = newElement.id;
-    if (!id) {
-      throw new Error("The data-live-preserve attribute requires an id attribute to be set on the element");
-    }
-    const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
-    if (!(oldElement instanceof HTMLElement)) {
-      throw new Error(`The element with id "${id}" was not found in the original HTML`);
-    }
-    newElement.removeAttribute("data-live-preserve");
-    originalElementsToPreserve.set(id, oldElement);
-    syncAttributes(newElement, oldElement);
-  });
-  Idiomorph.morph(rootFromElement, rootToElement, {
-    callbacks: {
-      beforeNodeMorphed: (fromEl, toEl) => {
-        if (!(fromEl instanceof Element) || !(toEl instanceof Element)) {
-          return true;
-        }
-        if (fromEl === rootFromElement) {
-          return true;
-        }
-        if (fromEl.id && originalElementsToPreserve.has(fromEl.id)) {
-          if (fromEl.id === toEl.id) {
-            handledPreserveIds.add(fromEl.id);
-            return false;
-          }
-          const clonedFromEl = markElementAsNeedingPostMorphSwap(fromEl.id, true);
-          if (!clonedFromEl) {
-            throw new Error("missing clone");
-          }
-          Idiomorph.morph(clonedFromEl, toEl);
-          return false;
-        }
-        if (fromEl instanceof HTMLElement && toEl instanceof HTMLElement) {
-          if (typeof fromEl.__x !== "undefined") {
-            if (!window.Alpine) {
-              throw new Error(
-                "Unable to access Alpine.js though the global window.Alpine variable. Please make sure Alpine.js is loaded before Symfony UX LiveComponent."
-              );
-            }
-            if (typeof window.Alpine.morph !== "function") {
-              throw new Error(
-                "Unable to access Alpine.js morph function. Please make sure the Alpine.js Morph plugin is installed and loaded, see https://alpinejs.dev/plugins/morph for more information."
-              );
-            }
-            window.Alpine.morph(fromEl.__x, toEl);
-          }
-          if (externalMutationTracker.wasElementAdded(fromEl)) {
-            fromEl.insertAdjacentElement("afterend", toEl);
-            return false;
-          }
-          if (modifiedFieldElements.includes(fromEl)) {
-            setValueOnElement(toEl, getElementValue(fromEl));
-          }
-          if (fromEl === document.activeElement && fromEl !== document.body && null !== getModelDirectiveFromElement(fromEl, false)) {
-            setValueOnElement(toEl, getElementValue(fromEl));
-          }
-          const elementChanges = externalMutationTracker.getChangedElement(fromEl);
-          if (elementChanges) {
-            elementChanges.applyToElement(toEl);
-          }
-          if (fromEl.nodeName.toUpperCase() !== "OPTION" && fromEl.isEqualNode(toEl)) {
-            const normalizedFromEl = cloneHTMLElement(fromEl);
-            normalizeAttributesForComparison(normalizedFromEl);
-            const normalizedToEl = cloneHTMLElement(toEl);
-            normalizeAttributesForComparison(normalizedToEl);
-            if (normalizedFromEl.isEqualNode(normalizedToEl)) {
-              return false;
-            }
-          }
-        }
-        if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
-          fromEl.innerHTML = toEl.innerHTML;
-          originalElementsToPreserve.forEach((originalElement, id) => {
-            if (handledPreserveIds.has(id)) {
-              return;
-            }
-            const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
-            if (placeholder) {
-              syncAttributes(placeholder, originalElement);
-              placeholder.replaceWith(originalElement);
-              handledPreserveIds.add(id);
-              elementsToNotifyPreserveRestored.push(originalElement);
-            }
-          });
-          return true;
-        }
-        if (fromEl.parentElement?.hasAttribute("data-skip-morph")) {
-          return false;
-        }
-        return !fromEl.hasAttribute("data-live-ignore");
-      },
-      beforeNodeRemoved(node) {
-        if (!(node instanceof HTMLElement)) {
-          return true;
-        }
-        if (node.id && originalElementsToPreserve.has(node.id)) {
-          markElementAsNeedingPostMorphSwap(node.id, false);
-          return true;
-        }
-        if (externalMutationTracker.wasElementAdded(node)) {
-          return false;
-        }
-        return !node.hasAttribute("data-live-ignore");
+    for (const { element, id } of childComponents) {
+      if (id && element.getAttribute("id") !== id) {
+        externallyChangedIds.set(element, element.getAttribute("id"));
+        setId(element, id);
       }
     }
-  });
-  originalElementIdsToSwapAfter.forEach((id) => {
-    const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
-    const originalElement = originalElementsToPreserve.get(id);
-    if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
-      throw new Error("Missing elements.");
+    const originalElementIdsToSwapAfter = [];
+    const originalElementsToPreserve = /* @__PURE__ */ new Map();
+    const handledPreserveIds = /* @__PURE__ */ new Set();
+    const elementsToNotifyPreserveRestored = [];
+    const markElementAsNeedingPostMorphSwap = (id, replaceWithClone) => {
+      const oldElement = originalElementsToPreserve.get(id);
+      if (!(oldElement instanceof HTMLElement)) {
+        throw new Error(`Original element with id ${id} not found`);
+      }
+      originalElementIdsToSwapAfter.push(id);
+      handledPreserveIds.add(id);
+      if (!replaceWithClone) {
+        return null;
+      }
+      const clonedOldElement = cloneHTMLElement(oldElement);
+      oldElement.replaceWith(clonedOldElement);
+      return clonedOldElement;
+    };
+    rootToElement.querySelectorAll("[data-live-preserve]").forEach((newElement) => {
+      const id = newElement.id;
+      if (!id) {
+        throw new Error("The data-live-preserve attribute requires an id attribute to be set on the element");
+      }
+      const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
+      if (!(oldElement instanceof HTMLElement)) {
+        throw new Error(`The element with id "${id}" was not found in the original HTML`);
+      }
+      newElement.removeAttribute("data-live-preserve");
+      originalElementsToPreserve.set(id, oldElement);
+      syncAttributes(newElement, oldElement);
+    });
+    Idiomorph.morph(rootFromElement, rootToElement, {
+      callbacks: {
+        beforeNodeMorphed: (fromEl, toEl) => {
+          if (!(fromEl instanceof Element) || !(toEl instanceof Element)) {
+            return true;
+          }
+          if (fromEl === rootFromElement) {
+            return true;
+          }
+          if (fromEl.id && originalElementsToPreserve.has(fromEl.id)) {
+            if (fromEl.id === toEl.id) {
+              handledPreserveIds.add(fromEl.id);
+              return false;
+            }
+            const clonedFromEl = markElementAsNeedingPostMorphSwap(fromEl.id, true);
+            if (!clonedFromEl) {
+              throw new Error("missing clone");
+            }
+            Idiomorph.morph(clonedFromEl, toEl);
+            return false;
+          }
+          if (fromEl instanceof HTMLElement && toEl instanceof HTMLElement) {
+            if (typeof fromEl.__x !== "undefined") {
+              if (!window.Alpine) {
+                throw new Error(
+                  "Unable to access Alpine.js though the global window.Alpine variable. Please make sure Alpine.js is loaded before Symfony UX LiveComponent."
+                );
+              }
+              if (typeof window.Alpine.morph !== "function") {
+                throw new Error(
+                  "Unable to access Alpine.js morph function. Please make sure the Alpine.js Morph plugin is installed and loaded, see https://alpinejs.dev/plugins/morph for more information."
+                );
+              }
+              window.Alpine.morph(fromEl.__x, toEl);
+            }
+            if (externalMutationTracker.wasElementAdded(fromEl)) {
+              const id = fromEl.getAttribute("id");
+              if (id && id === toEl.getAttribute("id")) {
+                return false;
+              }
+              toEl.before(document.createComment(""));
+              return false;
+            }
+            if (modifiedFieldElements.includes(fromEl)) {
+              setValueOnElement(toEl, getElementValue(fromEl));
+            }
+            if (fromEl === document.activeElement && fromEl !== document.body && null !== getModelDirectiveFromElement(fromEl, false)) {
+              setValueOnElement(toEl, getElementValue(fromEl));
+            }
+            const elementChanges = externalMutationTracker.getChangedElement(fromEl);
+            if (elementChanges) {
+              const serverId = toEl.getAttribute("id");
+              elementChanges.applyToElement(toEl);
+              if (externallyChangedIds.has(fromEl)) {
+                setId(toEl, serverId);
+              }
+            }
+            if (fromEl.nodeName.toUpperCase() !== "OPTION" && fromEl.isEqualNode(toEl)) {
+              const normalizedFromEl = cloneHTMLElement(fromEl);
+              normalizeAttributesForComparison(normalizedFromEl);
+              const normalizedToEl = cloneHTMLElement(toEl);
+              normalizeAttributesForComparison(normalizedToEl);
+              if (normalizedFromEl.isEqualNode(normalizedToEl)) {
+                return false;
+              }
+            }
+          }
+          if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
+            fromEl.innerHTML = toEl.innerHTML;
+            originalElementsToPreserve.forEach((originalElement, id) => {
+              if (handledPreserveIds.has(id)) {
+                return;
+              }
+              const placeholder = fromEl.querySelector(`#${CSS.escape(id)}`);
+              if (placeholder) {
+                syncAttributes(placeholder, originalElement);
+                placeholder.replaceWith(originalElement);
+                handledPreserveIds.add(id);
+                elementsToNotifyPreserveRestored.push(originalElement);
+              }
+            });
+            return true;
+          }
+          if (fromEl.parentElement?.hasAttribute("data-skip-morph")) {
+            return false;
+          }
+          return !fromEl.hasAttribute("data-live-ignore");
+        },
+        beforeNodeRemoved(node) {
+          if (!(node instanceof HTMLElement)) {
+            return true;
+          }
+          if (node.id && originalElementsToPreserve.has(node.id)) {
+            markElementAsNeedingPostMorphSwap(node.id, false);
+            return true;
+          }
+          if (externalMutationTracker.wasElementAdded(node)) {
+            return false;
+          }
+          return !node.hasAttribute("data-live-ignore");
+        }
+      }
+    });
+    originalElementIdsToSwapAfter.forEach((id) => {
+      const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
+      const originalElement = originalElementsToPreserve.get(id);
+      if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
+        throw new Error("Missing elements.");
+      }
+      newElement.replaceWith(originalElement);
+    });
+    elementsToNotifyPreserveRestored.forEach((el) => {
+      el.dispatchEvent(new CustomEvent("live:preserve-restored"));
+    });
+  } finally {
+    for (const [element, id] of externallyChangedIds) {
+      setId(element, id);
     }
-    newElement.replaceWith(originalElement);
-  });
-  elementsToNotifyPreserveRestored.forEach((el) => {
-    el.dispatchEvent(new CustomEvent("live:preserve-restored"));
-  });
+  }
 }
 
 // src/Rendering/ChangingItemsTracker.ts
@@ -1397,6 +1689,7 @@ var ExternalMutationTracker_default = class {
     this.addedElements = [];
     this.removedElements = [];
     this.isStarted = false;
+    this.originalIds = /* @__PURE__ */ new Map();
     this.element = element;
     this.shouldTrackChangeCallback = shouldTrackChangeCallback;
     this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
@@ -1421,6 +1714,15 @@ var ExternalMutationTracker_default = class {
   }
   getChangedElement(element) {
     return this.changedElements.has(element) ? this.changedElements.get(element) : null;
+  }
+  /** IDs before external changes, used to match elements against the server HTML. */
+  getOriginalIds() {
+    for (const element of this.originalIds.keys()) {
+      if (!this.element.contains(element)) {
+        this.originalIds.delete(element);
+      }
+    }
+    return this.originalIds;
   }
   getAddedElements() {
     return this.addedElements;
@@ -1558,6 +1860,14 @@ var ExternalMutationTracker_default = class {
   handleGenericAttributeMutation(mutation, elementChanges) {
     const attributeName = mutation.attributeName;
     const element = mutation.target;
+    if (attributeName === "id") {
+      if (!this.originalIds.has(element)) {
+        this.originalIds.set(element, mutation.oldValue);
+      }
+      if (element.getAttribute("id") === this.originalIds.get(element)) {
+        this.originalIds.delete(element);
+      }
+    }
     let oldValue = mutation.oldValue;
     let newValue = element.getAttribute(attributeName);
     if (oldValue === attributeName) {
@@ -1882,6 +2192,8 @@ var Component = class {
     this.pendingFiles = {};
     /** Is a request waiting to be made? */
     this.isRequestPending = false;
+    /** Once removed, the component is done: it must never talk to the server again. */
+    this.isRemoved = false;
     /** Current "timeout" before the pending request should be sent. */
     this.requestDebounceTimeout = null;
     this.element = element;
@@ -1905,6 +2217,12 @@ var Component = class {
       (element2) => elementBelongsToThisComponent(element2, this)
     );
     this.externalMutationTracker.start();
+  }
+  /** The server ID before any pending external mutation of the root element. */
+  getOriginalId() {
+    this.externalMutationTracker.handlePendingChanges();
+    const originalIds = this.externalMutationTracker.getOriginalIds();
+    return originalIds.has(this.element) ? originalIds.get(this.element) : this.element.getAttribute("id");
   }
   addPlugin(plugin) {
     plugin.attachToComponent(this);
@@ -2020,7 +2338,38 @@ var Component = class {
   isTurboEnabled() {
     return typeof Turbo !== "undefined" && !this.element.closest('[data-turbo="false"]');
   }
+  /**
+   * Ends the component on the page.
+   *
+   * Once the final render and its events have been processed, polling stops and the
+   * component leaves the registry. The element is then marked with `data-live-removing`
+   * and left in place, so the page can animate it out without a live component still
+   * answering for it.
+   *
+   * With no animation on `[data-live-removing]`, there is nothing to wait for and the
+   * element goes on the next frame.
+   */
+  removeFromPage() {
+    this.isRemoved = true;
+    this.disconnect();
+    const element = this.element;
+    for (const name of element.getAttributeNames()) {
+      if (name.startsWith("data-live-") && name.endsWith("-value")) {
+        element.removeAttribute(name);
+      }
+    }
+    element.setAttribute("data-live-removing", "");
+    requestAnimationFrame(() => {
+      const animations = (element.getAnimations?.({ subtree: true }) ?? []).filter((animation) => animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY);
+      Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+        element.remove();
+      });
+    });
+  }
   tryStartingRequest() {
+    if (this.isRemoved) {
+      return;
+    }
     if (!this.backendRequest) {
       this.performRequest();
       return;
@@ -2067,12 +2416,12 @@ var Component = class {
     this.isRequestPending = remainingActions.length > 0;
     this.backendRequest.promise.then(async (response) => {
       const backendResponse = new BackendResponse_default(response);
-      const html = await backendResponse.getBody();
+      const headers = backendResponse.response.headers;
       for (const input of Object.values(this.pendingFiles)) {
         input.value = "";
       }
-      const headers = backendResponse.response.headers;
-      if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect")) {
+      const html = await backendResponse.getBody();
+      if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect") && !headers.has("X-Live-Remove")) {
         const controls = { displayError: true, resetLoadingState: false };
         this.valueStore.pushPendingPropsBackToDirty();
         this.hooks.triggerHook("response:error", backendResponse, controls);
@@ -2084,6 +2433,14 @@ var Component = class {
         }
         this.backendRequest = null;
         thisPromiseResolve(backendResponse);
+        return response;
+      }
+      if (backendResponse.isRemoved()) {
+        this.isRemoved = true;
+        this.processRerender(html, backendResponse);
+        this.backendRequest = null;
+        thisPromiseResolve(backendResponse);
+        this.removeFromPage();
         return response;
       }
       const liveUrl = backendResponse.getLiveUrl();
@@ -2142,7 +2499,8 @@ var Component = class {
       newElement,
       this.unsyncedInputsTracker.getUnsyncedInputs(),
       (element) => getValueFromElement(element, this.valueStore),
-      this.externalMutationTracker
+      this.externalMutationTracker,
+      findChildren(this)
     );
     this.externalMutationTracker.start();
     const newProps = this.elementDriver.getComponentProps();
@@ -2171,6 +2529,17 @@ var Component = class {
         })
       );
     });
+    try {
+      const downloadUrl = backendResponse.getDownloadUrl();
+      const download = backendResponse.getDownload();
+      if (downloadUrl) {
+        triggerDownload({ url: downloadUrl });
+      } else if (download) {
+        triggerDownload(download);
+      }
+    } catch (error) {
+      console.error("Could not start the download:", error);
+    }
     this.hooks.triggerHook("render:finished", this);
   }
   calculateDebounce(debounce) {
@@ -2270,6 +2639,9 @@ function proxifyComponent(component) {
       if (component2.valueStore.has(prop)) {
         return component2.getData(prop);
       }
+      if ("toJSON" === prop || "then" === prop) {
+        return void 0;
+      }
       return (args) => {
         return component2.action.apply(component2, [prop, args]);
       };
@@ -2283,6 +2655,25 @@ function proxifyComponent(component) {
       return true;
     }
   });
+}
+function triggerDownload(download) {
+  const fromUrl = "url" in download;
+  const href = fromUrl ? download.url : URL.createObjectURL(download.blob);
+  const link = Object.assign(document.createElement("a"), {
+    href,
+    // an empty download attribute keeps the name the server sends. Note it is ignored
+    // cross-origin, where the remote Content-Disposition decides instead
+    download: fromUrl ? "" : download.filename,
+    style: "display: none"
+  });
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    if (!fromUrl) {
+      URL.revokeObjectURL(href);
+    }
+  }, 75);
 }
 
 // src/Component/ElementDriver.ts
@@ -2584,6 +2975,7 @@ var LoadingPlugin_default = class {
     const loadingDirectives = [];
     let matchingElements = Array.from(element.querySelectorAll("[data-loading]"));
     matchingElements = matchingElements.filter((elt) => elementBelongsToThisComponent(elt, component));
+    matchingElements = matchingElements.filter((elt) => !elt.closest("[data-live-ignore]"));
     if (element.hasAttribute("data-loading")) {
       matchingElements = [element, ...matchingElements];
     }
@@ -3154,7 +3546,7 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
   }
   onMutations(mutations) {
     mutations.forEach((mutation) => {
-      if (mutation.type === "attributes" && mutation.attributeName === "id" && this.element.id !== this.component.id) {
+      if (mutation.type === "attributes" && mutation.attributeName === "id" && this.component.getOriginalId() !== this.component.id) {
         this.disconnectComponent();
         this.createComponent();
         this.connectComponent();

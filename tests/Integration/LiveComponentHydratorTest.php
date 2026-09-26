@@ -160,7 +160,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
 
     #[Group('transient-on-windows')]
     #[DataProvider('provideDehydrationHydrationTests')]
-    public function testCanDehydrateAndHydrateComponentWithTestCases(callable $testFactory, ?int $minPhpVersion = null)
+    public function testCanDehydrateAndHydrateComponentWithTestCases(callable $testFactory, ?int $minPhpVersion = null): void
     {
         $this->executeHydrationTestCase($testFactory, $minPhpVersion);
     }
@@ -182,7 +182,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: true, onUpdated: 'onFirstNameUpdated')]
                 public string $firstName;
 
-                public function onFirstNameUpdated($oldValue)
+                public function onFirstNameUpdated($oldValue): void
                 {
                     if ('Victor' === $this->firstName) {
                         $this->firstName = 'Revert to '.$oldValue;
@@ -205,7 +205,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: ['name'], onUpdated: ['name' => 'onNameUpdated'])]
                 public ProductFixtureEntity $product;
 
-                public function onNameUpdated($oldValue)
+                public function onNameUpdated($oldValue): void
                 {
                     if ('Rabbit' === $this->product->name) {
                         $this->product->name = 'Revert to '.$oldValue;
@@ -229,7 +229,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: [LiveProp::IDENTITY], onUpdated: [LiveProp::IDENTITY => 'onEntireEntityUpdated'])]
                 public Entity1 $entity1;
 
-                public function onEntireEntityUpdated($oldValue)
+                public function onEntireEntityUpdated($oldValue): void
                 {
                     // Sanity check
                     if ($this->entity1 === $oldValue) {
@@ -863,6 +863,21 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+        yield 'Enum: a non-scalar updated value is ignored gracefully (not a 500)' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public IntEnum $int = IntEnum::HIGH;
+            })
+                ->mountWith(['int' => IntEnum::HIGH])
+                // a tampered payload sending an array instead of a scalar used to trigger
+                // a TypeError (500) in BackedEnum::tryFrom() instead of being ignored
+                ->userUpdatesProps(['int' => ['not-a-scalar']])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame(IntEnum::HIGH, $object->int);
+                })
+            ;
+        }];
+
         yield 'Enum: null-like enum values are handled correctly' => [static function () {
             return HydrationTest::create(new class {
                 #[LiveProp(writable: true)]
@@ -912,7 +927,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: true)]
                 public ?Address $address = null;
 
-                public function mount()
+                public function mount(): void
                 {
                     $this->address = new Address();
                     $this->address->address = '1 rue du Bac';
@@ -934,12 +949,35 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+        yield 'Object: an unknown property in an updated object is ignored gracefully (not a 500)' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public ?Address $address = null;
+
+                public function mount(): void
+                {
+                    $this->address = new Address();
+                    $this->address->address = '1 rue du Bac';
+                    $this->address->city = 'Paris';
+                }
+            })
+                ->mountWith([])
+                // a tampered payload sending an unknown property used to trigger a
+                // ReflectionException (500) instead of being ignored
+                ->userUpdatesProps(['address' => ['address' => '4 rue des lilas', 'unknownProperty' => 'x']])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame('1 rue du Bac', $object->address->address);
+                    self::assertSame('Paris', $object->address->city);
+                })
+            ;
+        }];
+
         yield 'Object: (de)hydrates correctly multidementional DTO' => [static function () {
             return HydrationTest::create(new class {
                 #[LiveProp(writable: true)]
                 public ?CustomerDetails $customerDetails = null;
 
-                public function mount()
+                public function mount(): void
                 {
                     $this->customerDetails = new CustomerDetails();
                     $this->customerDetails->lastName = 'Matheo';
@@ -975,7 +1013,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: true)]
                 public array $customerDetailsCollection = [];
 
-                public function mount()
+                public function mount(): void
                 {
                     $customerDetails = new CustomerDetails();
                     $customerDetails->lastName = 'Matheo';
@@ -1221,7 +1259,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 #[LiveProp(writable: true)]
                 public ?ParentDTO $parent = null;
 
-                public function mount()
+                public function mount(): void
                 {
                     $this->parent = new ParentDTO();
                     $this->parent->name = 'Mozart';
@@ -1312,6 +1350,38 @@ final class LiveComponentHydratorTest extends KernelTestCase
                     self::assertSame(20, $object->temperatures[1]->degrees);
                     self::assertSame('C', $object->temperatures[1]->uom);
                     self::assertSame(['foo', 'bar'], $object->tags);
+                })
+            ;
+        }];
+
+        yield 'Nullable collection: using serializer (de)hydrates correctly' => [static function () {
+            return HydrationTest::create(new class {
+                /** @var \Symfony\UX\LiveComponent\Tests\Fixtures\Dto\Temperature[]|null */
+                #[LiveProp(useSerializerForHydration: true)]
+                public ?array $temperatures = [];
+
+                /**
+                 * @var string[]|null
+                 */
+                #[LiveProp(useSerializerForHydration: true)]
+                public ?array $tags = null;
+            })
+                ->mountWith([
+                    'temperatures' => [
+                        new Temperature(10, 'C'),
+                    ],
+                    'tags' => null,
+                ])
+                ->assertDehydratesTo([
+                    'temperatures' => [
+                        ['degrees' => 10, 'uom' => 'C'],
+                    ],
+                    'tags' => null,
+                ])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertSame(10, $object->temperatures[0]->degrees);
+                    self::assertSame('C', $object->temperatures[0]->uom);
+                    self::assertNull($object->tags);
                 })
             ;
         }];
@@ -1661,7 +1731,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         }];
     }
 
-    public function testHydrationWithInvalidDate()
+    public function testHydrationWithInvalidDate(): void
     {
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('The model path "createdAt" was sent invalid date data "0" or in an invalid format. Make sure it\'s a valid date and it matches the expected format "Y. m. d.".');
@@ -1689,7 +1759,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         });
     }
 
-    public function testPassingArrayToWritablePropForHydrationIsNotAllowed()
+    public function testPassingArrayToWritablePropForHydrationIsNotAllowed(): void
     {
         $component = new class {
             #[LiveProp(writable: true)]
@@ -1720,7 +1790,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         );
     }
 
-    public function testInterfaceTypedLivePropCannotBeHydrated()
+    public function testInterfaceTypedLivePropCannotBeHydrated(): void
     {
         $componentClass = new class {
             #[LiveProp(writable: true)]
@@ -1739,7 +1809,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         );
     }
 
-    public function testInterfaceTypedLivePropCannotBeDehydrated()
+    public function testInterfaceTypedLivePropCannotBeDehydrated(): void
     {
         $componentClass = new class {
             #[LiveProp(writable: true)]
@@ -1756,7 +1826,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
     }
 
     #[DataProvider('provideInvalidHydrationTests')]
-    public function testInvalidTypeHydration(callable $testFactory, ?int $minPhpVersion = null)
+    public function testInvalidTypeHydration(callable $testFactory, ?int $minPhpVersion = null): void
     {
         $this->executeHydrationTestCase($testFactory, $minPhpVersion);
     }
@@ -1853,7 +1923,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         }];
     }
 
-    public function testHydrationFailsIfChecksumMissing()
+    public function testHydrationFailsIfChecksumMissing(): void
     {
         $component = $this->getComponent('component1');
 
@@ -1862,7 +1932,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->hydrateComponent($component, 'component1', []);
     }
 
-    public function testHydrationFailsOnChecksumMismatch()
+    public function testHydrationFailsOnChecksumMismatch(): void
     {
         $component = $this->getComponent('component1');
 
@@ -1871,7 +1941,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->hydrateComponent($component, 'component1', ['@checksum' => 'invalid']);
     }
 
-    public function testHydrationTakeUpdatedParentPropsIntoAccount()
+    public function testHydrationTakeUpdatedParentPropsIntoAccount(): void
     {
         $component = new class {
             #[LiveProp(writable: true)]
@@ -1905,7 +1975,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertTrue($freshComponent->shouldUppercase);
     }
 
-    public function testHydrationWithUpdatesParentPropsAndBadChecksumFails()
+    public function testHydrationWithUpdatesParentPropsAndBadChecksumFails(): void
     {
         $component = new class {
             #[LiveProp(updateFromParent: true)]
@@ -1935,7 +2005,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         );
     }
 
-    public function testCrossComponentChecksumReplayIsRejected()
+    public function testCrossComponentChecksumReplayIsRejected(): void
     {
         // Two components sharing a prop name. The MAC must be bound to the
         // component identity so a blob minted for "componentA" cannot be
@@ -1968,7 +2038,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         );
     }
 
-    public function testCrossSlotChecksumReplayIsRejected()
+    public function testCrossSlotChecksumReplayIsRejected(): void
     {
         // A blob signed for the regular `props` slot must not be accepted
         // when replayed in the `propsFromParent` slot.
@@ -2002,7 +2072,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         );
     }
 
-    public function testPreDehydrateAndPostHydrateHooksCalled()
+    public function testPreDehydrateAndPostHydrateHooksCalled(): void
     {
         $mounted = $this->mountComponent('component2');
 
@@ -2029,7 +2099,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertTrue($component->postHydrateCalled);
     }
 
-    public function testCorrectlyUsesCustomFrontendNameInDehydrateAndHydrate()
+    public function testCorrectlyUsesCustomFrontendNameInDehydrateAndHydrate(): void
     {
         $mounted = $this->mountComponent('component3', ['prop1' => 'value1', 'prop2' => 'value2']);
         $dehydratedProps = $this->dehydrateComponent($mounted)->getProps();
@@ -2050,7 +2120,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertSame('value2', $component->prop2);
     }
 
-    public function testCanDehydrateAndHydrateComponentsWithAttributes()
+    public function testCanDehydrateAndHydrateComponentsWithAttributes(): void
     {
         $mounted = $this->mountComponent('with_attributes', $attributes = ['class' => 'foo', 'value' => null], false);
 
@@ -2066,7 +2136,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
         $this->assertSame($attributes, $actualAttributes->all());
     }
 
-    public function testCanDehydrateAndHydrateComponentsWithEmptyAttributes()
+    public function testCanDehydrateAndHydrateComponentsWithEmptyAttributes(): void
     {
         $mounted = $this->mountComponent('with_attributes', [], false);
 
@@ -2082,7 +2152,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
     }
 
     #[DataProvider('truthyValueProvider')]
-    public function testCoerceTruthyValuesForScalarTypes($prop, $value, $expected)
+    public function testCoerceTruthyValuesForScalarTypes($prop, $value, $expected): void
     {
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('scalar_types'))->getProps();
 
@@ -2094,7 +2164,7 @@ final class LiveComponentHydratorTest extends KernelTestCase
     }
 
     #[DataProvider('falseyValueProvider')]
-    public function testCoerceFalseyValuesForScalarTypes($prop, $value, $expected)
+    public function testCoerceFalseyValuesForScalarTypes($prop, $value, $expected): void
     {
         $dehydratedProps = $this->dehydrateComponent($this->mountComponent('scalar_types'))->getProps();
 

@@ -517,7 +517,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
             if (
                 mutation.type === 'attributes' &&
                 mutation.attributeName === 'id' &&
-                this.element.id !== this.component.id
+                this.component.getOriginalId() !== this.component.id
             ) {
                 this.disconnectComponent();
                 this.createComponent();

@@ -16,6 +16,7 @@ A real-time product search component might look like this::
 
     use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
     use Symfony\UX\LiveComponent\Attribute\LiveProp;
+    use Symfony\UX\LiveComponent\ComponentToolsTrait;
     use Symfony\UX\LiveComponent\DefaultActionTrait;
 
     #[AsLiveComponent]
@@ -558,13 +559,6 @@ library. Make sure it is installed in you application:
 
     $ composer require phpdocumentor/reflection-docblock
 
-To get rid of deprecations about ``PropertyInfoExtractor::getTypes()`` from the `Symfony PropertyInfo`_ component,
-ensure to upgrade ``symfony/property-info`` to at least 7.1, which requires **PHP 8.2**::
-
-.. code-block:: terminal
-
-    $ composer require symfony/property-info:^7.1
-
 Writable Object Properties or Array Keys
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -924,6 +918,12 @@ initialized:
 
     const component = document.getElementById('id-of-your-element').__component;
     component.mode = 'editing';
+
+.. note::
+
+    An action cannot be named ``then`` or ``toJSON``: these names are reserved
+    so that ``await`` and ``JSON.stringify()`` keep working on the ``Component``
+    object.
 
 .. _javascript-manual-element-change:
 
@@ -1330,10 +1330,105 @@ the component now extends ``AbstractController``! That is totally
 allowed, and gives you access to all of your normal controller
 shortcuts. We even added a flash message!
 
+.. _removing-a-component:
+
+Removing a Component from the Page
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. versionadded:: 3.5
+
+    ``LiveResponse::remove()`` was added in LiveComponent 3.5.
+
+An action can end the component after one final re-render::
+
+    // src/Twig/Components/NotificationBanner.php
+    namespace App\Twig\Components;
+
+    use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
+    use Symfony\UX\LiveComponent\Attribute\LiveAction;
+    use Symfony\UX\LiveComponent\Attribute\LiveProp;
+    use Symfony\UX\LiveComponent\DefaultActionTrait;
+    use Symfony\UX\LiveComponent\LiveResponse;
+
+    #[AsLiveComponent]
+    class NotificationBanner
+    {
+        use DefaultActionTrait;
+        use ComponentToolsTrait;
+
+        #[LiveProp]
+        public Notification $notification;
+
+        #[LiveAction]
+        public function dismiss(NotificationRepository $repository): LiveResponse
+        {
+            $repository->markAsRead($this->notification);
+            $this->emit('notificationDismissed', ['id' => $this->notification->getId()]);
+
+            return LiveResponse::remove();
+        }
+    }
+
+.. code-block:: html+twig
+
+    <div {{ attributes }}>
+        {{ notification.message }}
+
+        <button data-action="live#action" data-live-action-param="dismiss">Dismiss</button>
+    </div>
+
+The server performs one final render. This carries the usual LiveComponent instructions,
+so events emitted by the action reach other components and browser events are dispatched.
+The component becomes terminal before those events are processed, so their handlers cannot
+start another request on the component being removed. It then disconnects, leaves the
+registry, drops its props and is taken off the page.
+
+Nothing is deleted server-side. This ends the component on the page, and says nothing
+about your data.
+
+Animating the removal
+.....................
+
+On its way out, the element carries a ``data-live-removing`` attribute, and it is only
+dropped once whatever you animate on it has finished:
+
+.. code-block:: css
+
+    .notification {
+        transition: opacity 300ms, translate 300ms;
+    }
+
+    .notification[data-live-removing] {
+        opacity: 0;
+        translate: 2rem 0;
+    }
+
+Nothing to declare beyond the CSS: with no animation on ``[data-live-removing]``, there
+is nothing to wait for and the element goes on the next frame. An endless animation is
+ignored, as it would keep the element on the page forever.
+
+The component is already dead by then, so the element that fades out is inert: it polls
+nothing, and a click on one of its buttons reaches nobody.
+
+Use it for something the user dismisses on its own: a flash, a banner, a notification.
+When another part of the page has to react, :ref:`emit an event <emit>` before returning
+the removal response.
+
+Like the download responses, ``LiveResponse::remove()`` can only be returned from a
+``LiveAction`` or a ``LiveListener``, over POST.
+
+.. _working-with-files:
+
+Files
+-----
+
+Live Components can send files to the server (uploads) and return files from
+a ``LiveAction`` (downloads).
+
 .. _files:
 
 Uploading files
----------------
+~~~~~~~~~~~~~~~
 
 Files aren't sent to the component by default. You need to use a live action
 to handle the files and tell the component when the file should be sent:
@@ -1399,39 +1494,127 @@ The files will be available in a regular ``$request->files`` files bag::
 .. _downloads:
 
 Downloading files
------------------
+~~~~~~~~~~~~~~~~~
 
-Currently, Live Components do not natively support returning file responses
-directly from a LiveAction. However, you can implement file downloads by
-redirecting to a route that handles the file response.
+.. versionadded:: 3.5
 
-Create a LiveAction that generates the URL for the file download and returns a ``RedirectResponse``::
+    Triggering a file download from a ``LiveAction`` was added in LiveComponent 3.5.
 
-        #[LiveAction]
-        public function initiateDownload(UrlGeneratorInterface $urlGenerator): RedirectResponse
-        {
-            $url = $urlGenerator->generate('app_file_download');
-            return new RedirectResponse($url);
-        }
-
-.. code-block:: html+twig
-
-    <div {{ attributes }} data-turbo="false">
-        <button
-            data-action="live#action"
-            data-live-action-param="initiateDownload"
-        >
-            Download
-        </button>
-    </div>
-
+Return a ``LiveResponse`` from a ``LiveAction`` to ask the browser for a download. Your
+component still re-renders, so anything the action changed stays on the page.
 
 .. tip::
 
-    When Turbo is enabled, if a LiveAction response redirects to another URL,
-    Turbo will make a request to prefetch the content. Here, adding ``data-turbo="false"``
-    ensures that the download URL is called only once.
+    Prefer ``LiveResponse::downloadUrl()`` whenever you can serve the file from its own route.
+    The browser downloads it natively, so no memory is used on either side, progress is
+    reported, range requests and resuming work, and you can access-control and log that URL on
+    its own. Reach for ``downloadFile()`` only when no such URL can exist, typically because
+    the action builds the content and you would have to store it first.
 
+Pointing the browser at a URL
+.............................
+
+::
+
+    // src/Twig/Components/ReportExporter.php
+    namespace App\Twig\Components;
+
+    use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
+    use Symfony\UX\LiveComponent\Attribute\LiveAction;
+    use Symfony\UX\LiveComponent\Attribute\LiveProp;
+    use Symfony\UX\LiveComponent\DefaultActionTrait;
+    use Symfony\UX\LiveComponent\LiveResponse;
+
+    #[AsLiveComponent]
+    class ReportExporter
+    {
+        use DefaultActionTrait;
+
+        #[LiveProp]
+        public int $exportCount = 0;
+
+        #[LiveAction]
+        public function export(UrlGeneratorInterface $urlGenerator): LiveResponse
+        {
+            ++$this->exportCount;
+
+            return LiveResponse::downloadUrl($urlGenerator->generate('app_report_download'));
+        }
+    }
+
+.. code-block:: html+twig
+
+    <div {{ attributes }}>
+        <button data-action="live#action" data-live-action-param="export">Export</button>
+
+        <p>Exported {{ exportCount }} times</p>
+    </div>
+
+The component re-renders and ``exportCount`` is up to date, while the browser fetches the file
+from the URL on its own.
+
+Sending the file with the response
+..................................
+
+When no URL can serve the content, ``downloadFile()`` sends it alongside your rendered
+component, in a single response::
+
+    #[LiveAction]
+    public function export(): LiveResponse
+    {
+        ++$this->exportCount;
+
+        return LiveResponse::downloadFile($this->buildCsv(), 'report.csv', 'text/csv');
+    }
+
+You can pass four kinds of content as the first argument:
+
+* a ``string``, which is always the contents themselves and **never** a path;
+* an ``\SplFileInfo``, whose basename and size are used, so you can omit ``$filename``;
+* a ``resource``, for instance what ``$filesystem->readStream('report.csv')`` returns;
+* a ``\Closure``, called to produce the contents, either by echoing them or by returning
+  an iterable.
+
+Everything but a ``string`` is streamed, so the file is never held in memory on your server::
+
+    #[LiveAction]
+    public function exportLarge(): LiveResponse
+    {
+        return LiveResponse::downloadFile(
+            $this->filesystem->readStream('reports/2026.csv'),
+            'report.csv',
+            'text/csv',
+            $this->filesystem->fileSize('reports/2026.csv'),
+        );
+    }
+
+The last argument is the size in bytes. You never need it for a ``string`` or an
+``\SplFileInfo``, where it is deduced, and passing a value that contradicts the real one throws.
+Nothing can be deduced from a stream or a closure, so pass it whenever you know it: it is what
+lets the response carry a ``Content-Length``, and the browser show progress.
+
+Whatever your server does, the browser buffers the contents before saving them, which is why
+``downloadUrl()`` remains the better answer for large files.
+
+.. caution::
+
+    You can only return a ``LiveResponse`` from a ``LiveAction`` or a ``LiveListener``, over
+    POST. Returning one from the default action throws: that action runs on every re-render, so
+    a component with ``data-poll`` would trigger a download every few hundred milliseconds.
+    Returning one from a GET request throws as well, since a GET is meant to be replayable by
+    prefetching or crawling.
+
+.. note::
+
+    An action returns either a ``LiveResponse`` or a redirect, never both. A redirect replaces
+    the render with an empty response, which has nowhere to carry a file.
+
+Batched actions
+...............
+
+Unlike a redirect, a download does not interrupt a batch: the actions you queued after it still
+run, and the file rides along with the final render. If several of them return a
+``LiveResponse``, the last one wins.
 
 .. _forms:
 
@@ -2267,8 +2450,8 @@ need::
         #[Assert\Valid]
         public User $user;
 
-         #[LiveProp]
-         #[Assert\IsTrue]
+        #[LiveProp]
+        #[Assert\IsTrue]
         public bool $agreeToTerms = false;
     }
 
@@ -2276,10 +2459,17 @@ Be sure to add the ``Valid`` attribute/annotation to any property
 where you want the object on that property to also be validated.
 
 Thanks to this setup, the component will now be automatically validated
-on each render, but in a smart way: a property will only be validated
+on each re-render, but in a smart way: a property will only be validated
 once its "model" has been updated on the frontend. The system keeps
 track of which models have been updated and only stores the errors for
 those fields on re-render.
+
+.. note::
+
+    Automatic validation *only* happens *after* the component state is sent back
+    from the frontend (e.g. when a writable ``LiveProp`` is updated or a
+    ``LiveAction`` is called). If you need to validate the *initial* render of a
+    component, see :ref:`validating-on-initial-render`.
 
 You can also trigger validation of your *entire* object manually in an
 action::
@@ -2332,6 +2522,45 @@ re-rendered. In your template, render errors using an ``_errors`` variable:
 Once a component has been validated, the component will "remember" that
 it has been validated. This means that, if you edit a field and the
 component re-renders, it will be validated again.
+
+.. _validating-on-initial-render:
+
+Validating on Initial Render
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Passing data to a Twig component generally means that it has already been
+validated by an upper layer of your application, most often in your controller
+or form handling. A component's primary responsibility is to render a valid
+state, not to validate application data again.
+
+Components can still enforce their own invariants when needed, especially when
+they are reusable across different contexts or when some combinations of
+properties would result in an invalid component state.
+
+Automatic validation is triggered when the component state is hydrated from the
+frontend. This means that the initial render is *never* validated automatically:
+if the data you pass when embedding the component violates some constraint
+(e.g. ``:agreeToTerms="false"`` violates the ``IsTrue`` constraint above), no
+error will be shown at first.
+
+To validate the component on its initial render too, call ``validate()``
+yourself from a ``PostMount`` hook. Pass ``throw: false`` so that, instead of
+throwing an exception, the errors are stored and made available in the template
+via the ``_errors`` variable::
+
+    use Symfony\UX\TwigComponent\Attribute\PostMount;
+
+    #[AsLiveComponent]
+    class EditUser
+    {
+        // ...
+
+        #[PostMount]
+        public function validateOnInitialRender(): void
+        {
+            $this->validate(throw: false);
+        }
+    }
 
 Resetting Validation Errors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2887,13 +3116,13 @@ You can also pass extra (scalar) data to the listeners::
 
 From a Twig template:
 
-  .. code-block:: html+twig
+.. code-block:: html+twig
 
-       <button
-           data-action="live#emit"
-           data-live-event-param="productAdded"
-           data-live-product-param="123"
-       >
+    <button
+        data-action="live#emit"
+        data-live-event-param="productAdded"
+        data-live-product-param="123"
+    >
 
 In your listeners, you can access this by adding a matching argument
 name with ``#[LiveArg]`` in front::
@@ -3628,6 +3857,14 @@ It's used during the morphing process when a component re-renders: it helps the
 `morphing library`_ "connect" elements or components in the existing HTML with the new
 HTML.
 
+Keep the server-rendered ``id`` stable to preserve an element's state. Changing
+an existing ID on the server replaces the element, including its JavaScript
+controllers and any client-side changes. For a child component, changing its
+``key`` therefore creates a new component instance.
+
+An ``id`` added, changed or removed by JavaScript is preserved as long as the
+server-rendered ID stays the same.
+
 Skipping Updating Certain Elements
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -3996,7 +4233,7 @@ So, if the following are the forms used::
         }
     }
 
-Use the addCollectionItem method from the LiveCollectionTrait to dynamically add entries to the children field of the form before submitting it::
+Use the ``addCollectionItem`` method from the ``LiveCollectionTrait`` to dynamically add entries to the children field of the form before submitting it::
 
     // Call the addCollectionItem method as many times as needed, specifying the name of the collection field.
     $component->call('addCollectionItem', ['name' => 'children']);
@@ -4045,6 +4282,5 @@ promise. However, any internal implementation in the JavaScript files
 .. _`setting the locale in the request`: https://symfony.com/doc/current/translation.html#translation-locale
 .. _`Stimulus action parameter`: https://stimulus.hotwired.dev/reference/actions#action-parameters
 .. _`@symfony/ux-live-component npm package`: https://www.npmjs.com/package/@symfony/ux-live-component
-.. _`Symfony PropertyInfo`: https://symfony.com/doc/current/components/property_info.html
 .. _`credentials option of the fetch() API`: https://developer.mozilla.org/en-US/docs/Web/API/fetch#credentials
 .. _`Symfony MakerBundle`: https://github.com/symfony/maker-bundle

@@ -1,12 +1,38 @@
 import { Controller } from '@hotwired/stimulus';
 
+interface Download {
+    filename: string;
+    blob: Blob;
+}
+/**
+ * A response may carry a file after the HTML, in the same body.
+ *
+ * `X-Live-Html-Length` gives the byte offset where the HTML ends and the file
+ * begins, so the two are split without any delimiter to scan for.
+ */
 declare class export_default$2{
     response: Response;
     private body;
     private liveUrl;
+    private download;
+    private parsePromise;
     constructor(response: Response);
     getBody(): Promise<string>;
+    /**
+     * Synchronous on purpose, so the download can be triggered from the render path.
+     * Only meaningful once getBody() has resolved.
+     */
+    getDownload(): Download | null;
     getLiveUrl(): string | null;
+    /**
+     * A URL the browser downloads itself, rather than a file carried in this response.
+     */
+    getDownloadUrl(): string | null;
+    /**
+     * Whether the component is meant to leave the page after its final re-render.
+     */
+    isRemoved(): boolean;
+    private parse;
 }
 
 declare class export_default$1{
@@ -197,6 +223,8 @@ declare class Component {
     private pendingFiles;
     /** Is a request waiting to be made? */
     private isRequestPending;
+    /** Once removed, the component is done: it must never talk to the server again. */
+    private isRemoved;
     /** Current "timeout" before the pending request should be sent. */
     private requestDebounceTimeout;
     private nextRequestPromise;
@@ -215,6 +243,8 @@ declare class Component {
         event: string;
         action: string;
     }>, id: string | null, backend: BackendInterface, elementDriver: ElementDriver);
+    /** The server ID before any pending external mutation of the root element. */
+    getOriginalId(): string | null;
     addPlugin(plugin: PluginInterface): void;
     connect(): void;
     disconnect(): void;
@@ -246,6 +276,18 @@ declare class Component {
     private performEmit;
     private doEmit;
     private isTurboEnabled;
+    /**
+     * Ends the component on the page.
+     *
+     * Once the final render and its events have been processed, polling stops and the
+     * component leaves the registry. The element is then marked with `data-live-removing`
+     * and left in place, so the page can animate it out without a live component still
+     * answering for it.
+     *
+     * With no animation on `[data-live-removing]`, there is nothing to wait for and the
+     * element goes on the next frame.
+     */
+    private removeFromPage;
     private tryStartingRequest;
     private performRequest;
     private processRerender;

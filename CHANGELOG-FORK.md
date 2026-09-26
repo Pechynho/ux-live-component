@@ -5,6 +5,17 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.5.1-pechynho
+
+- Sync with upstream `v3.5.1` (Idiomorph 0.7.4, `LiveResponse::remove()`,
+  file downloads from a LiveAction, external `id` mutation tracking, …).
+  Upstream rewrote the history of the `3.x` split, so the automatic sync
+  workflow could not merge (every file conflicted as add/add); the rewritten
+  `v3.1.0` commit (tree-identical to the one previously merged) was recorded
+  with `-s ours` and upstream was then merged on top.
+- Custom `data-live-preserve` innerHTML-restore fix re-applied onto the new
+  upstream `morphdom.ts` (now wrapped in the external-id `try/finally`).
+
 ## 3.0.1-pechynho
 
 - Fix `X-Live-Url` being applied via `history.replaceState` after the user
