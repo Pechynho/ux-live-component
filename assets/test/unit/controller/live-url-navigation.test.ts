@@ -9,11 +9,12 @@
 
 // [CUSTOM] Tests for the LiveUrl navigation-race guard: a late response must
 // not rewrite the URL of a history entry the user has already navigated away
-// from (detected via the navigation epoch + element connectedness).
+// from (detected via the Navigation API entry key + element connectedness).
+// Upstream PR: https://github.com/symfony/ux/pull/3928
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTest, expectCurrentSearch, initComponent, setCurrentSearch, shutdownTests } from '../../tools';
 import type Component from '../../../src/Component';
+import { createTest, expectCurrentSearch, initComponent, setCurrentSearch, shutdownTests } from '../../tools';
 
 const startRequestWithLiveUrl = async (test: Awaited<ReturnType<typeof createTest>>, liveUrl: string) => {
     test.expectsAjaxCall().expectUpdatedData({ prop: 'foo' }).willReturnLiveUrl(liveUrl).delayResponse(30);
@@ -28,14 +29,18 @@ const startRequestWithLiveUrl = async (test: Awaited<ReturnType<typeof createTes
     return { responsePromise };
 };
 
-// Turbo dispatches its events as bubbling events, so they reach the window
-const dispatchTurboVisit = () => {
-    document.documentElement.dispatchEvent(new CustomEvent('turbo:visit', { bubbles: true }));
+// jsdom has no Navigation API
+const stubNavigation = (key: string) => {
+    const navigation = { currentEntry: { key } };
+    Object.defineProperty(window, 'navigation', { value: navigation, configurable: true });
+
+    return navigation;
 };
 
 describe('LiveController LiveUrl update after navigation', () => {
     afterEach(() => {
         shutdownTests();
+        delete (window as any).navigation;
         history.replaceState(history.state, '', '/');
         setCurrentSearch('');
     });
@@ -57,12 +62,14 @@ describe('LiveController LiveUrl update after navigation', () => {
         expectCurrentSearch().toEqual('');
     });
 
-    it('skips the URL update when a Turbo visit started while the request was in flight', async () => {
+    it('skips the URL update when the history entry changed while the request was in flight', async () => {
+        const navigation = stubNavigation('first-entry');
         const test = await createTest({ prop: '' }, template);
 
         const { responsePromise } = await startRequestWithLiveUrl(test, '?prop=foo');
 
-        dispatchTurboVisit();
+        // simulate a Turbo visit or history back/forward: a new entry is current
+        navigation.currentEntry = { key: 'second-entry' };
 
         await responsePromise;
 
@@ -71,29 +78,17 @@ describe('LiveController LiveUrl update after navigation', () => {
         expect(test.element).toHaveTextContent('Prop: foo');
     });
 
-    it('skips the URL update when a popstate navigation happened while the request was in flight', async () => {
+    it('applies the URL update when a Turbo visit started but the page was not replaced yet', async () => {
+        stubNavigation('first-entry');
         const test = await createTest({ prop: '' }, template);
 
         const { responsePromise } = await startRequestWithLiveUrl(test, '?prop=foo');
 
-        // simulate history back/forward
-        window.dispatchEvent(new Event('popstate'));
+        // turbo:visit fires while the next page is still being fetched: the
+        // response still belongs to the current history entry
+        document.documentElement.dispatchEvent(new CustomEvent('turbo:visit', { bubbles: true }));
 
         await responsePromise;
-
-        expectCurrentSearch().toEqual('');
-    });
-
-    it('applies the URL update for a request sent after a navigation', async () => {
-        const test = await createTest({ prop: '' }, template);
-
-        // navigations that already happened must not block future requests
-        dispatchTurboVisit();
-        window.dispatchEvent(new Event('popstate'));
-
-        test.expectsAjaxCall().expectUpdatedData({ prop: 'foo' }).willReturnLiveUrl('?prop=foo');
-
-        await test.component.set('prop', 'foo', true);
 
         expectCurrentSearch().toEqual('?prop=foo');
     });
@@ -110,12 +105,13 @@ describe('LiveController LiveUrl update after navigation', () => {
     });
 
     it('applies the URL update when the pathname was changed by another component while the request was in flight', async () => {
+        stubNavigation('first-entry');
         const test = await createTest({ prop: '' }, template);
 
         const { responsePromise } = await startRequestWithLiveUrl(test, '?prop=foo');
 
         // simulate a sibling component applying its own path-mapped LiveUrl
-        // (replaceState does not fire popstate, so this is not a navigation)
+        // (replaceState keeps the history entry)
         history.replaceState(history.state, '', '/other-page');
 
         await responsePromise;

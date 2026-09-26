@@ -2169,14 +2169,6 @@ var ValueStore_default = class {
 
 // src/Component/index.ts
 var MAX_ACTIONS_PER_BATCH = 50;
-var navigationEpoch = 0;
-if (typeof window !== "undefined") {
-  const bumpNavigationEpoch = () => {
-    navigationEpoch++;
-  };
-  window.addEventListener("popstate", bumpNavigationEpoch);
-  window.addEventListener("turbo:visit", bumpNavigationEpoch);
-}
 var Component = class {
   element;
   name;
@@ -2421,12 +2413,13 @@ var Component = class {
       updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
       files: filesToSend
     };
-    const requestControls = { abortRequest: false };
+    const requestControls = { shouldSend: true, abortRequest: false };
     this.hooks.triggerHook("request:started", requestConfig, requestControls);
-    if (requestControls.abortRequest) {
+    if (!requestControls.shouldSend || requestControls.abortRequest) {
+      this.nextRequestPromise.then(thisPromiseResolve);
       return;
     }
-    const requestNavigationEpoch = navigationEpoch;
+    const historyEntryKey = this.getCurrentHistoryEntryKey();
     this.backendRequest = this.backend.makeRequest(
       requestConfig.props,
       requestConfig.actions,
@@ -2469,7 +2462,7 @@ var Component = class {
         return response;
       }
       const liveUrl = backendResponse.getLiveUrl();
-      if (liveUrl && this.element.isConnected && navigationEpoch === requestNavigationEpoch) {
+      if (liveUrl && this.element.isConnected && this.getCurrentHistoryEntryKey() === historyEntryKey) {
         history.replaceState(
           history.state,
           "",
@@ -2637,6 +2630,14 @@ var Component = class {
     this.nextRequestPromise = new Promise((resolve) => {
       this.nextRequestPromiseResolve = resolve;
     });
+  }
+  /**
+   * [CUSTOM] Key of the current history entry (Navigation API), or null when
+   * the browser does not support it. The key survives history.replaceState(),
+   * and changes on a new entry and on back/forward.
+   */
+  getCurrentHistoryEntryKey() {
+    return window.navigation?.currentEntry?.key ?? null;
   }
   /**
    * Called on a child component after the parent component render has requested

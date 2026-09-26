@@ -18,28 +18,20 @@ declare const Turbo: any;
 // Must match BatchActionController::MAX_ACTIONS_PER_BATCH on the PHP side.
 export const MAX_ACTIONS_PER_BATCH = 50;
 
-// [CUSTOM] Counts navigations (history back/forward, Turbo visits). A LiveUrl
-// from a response is only applied when the history entry is still the one the
-// request was sent from, i.e. the epoch did not change while the request was
-// in flight. Turbo is detected through its bubbling DOM event, without
-// importing it: in applications without Turbo the event simply never fires.
-let navigationEpoch = 0;
-if (typeof window !== 'undefined') {
-    const bumpNavigationEpoch = () => {
-        navigationEpoch++;
-    };
-    window.addEventListener('popstate', bumpNavigationEpoch);
-    window.addEventListener('turbo:visit', bumpNavigationEpoch);
-}
-
 type MaybePromise<T = void> = T | Promise<T>;
 
 export type ComponentHooks = {
     connect: (component: Component) => MaybePromise;
     disconnect: (component: Component) => MaybePromise;
-    'request:started': (requestConfig: any, controls: { abortRequest: boolean }) => MaybePromise;
+    'request:started': (
+        requestConfig: any,
+        // [CUSTOM] shouldSend = upstream PR symfony/ux#3929; abortRequest kept for BC
+        controls: { shouldSend: boolean; /** @deprecated set shouldSend to false */ abortRequest: boolean }
+    ) => MaybePromise;
+    // [CUSTOM] render:started added to the type (upstream PR symfony/ux#3922)
     'render:started': (html: string, backendResponse: BackendResponse, controls: { shouldRender: boolean }) => MaybePromise;
     'render:finished': (component: Component) => MaybePromise;
+    // [CUSTOM] resetLoadingState (upstream fixes it without an option: PR symfony/ux#3926)
     'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean; resetLoadingState: boolean }) => MaybePromise;
     'loading.state:started': (element: HTMLElement, request: BackendRequest) => MaybePromise;
     'loading.state:finished': (element: HTMLElement) => MaybePromise;
@@ -399,17 +391,21 @@ export default class Component {
             updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
             files: filesToSend,
         };
-        // [CUSTOM] Allow hooks to abort the request before it is sent.
-        const requestControls = { abortRequest: false };
+        // [CUSTOM] Allow hooks to cancel the request before it is sent.
+        const requestControls = { shouldSend: true, abortRequest: false };
         this.hooks.triggerHook('request:started', requestConfig, requestControls);
 
-        if (requestControls.abortRequest) {
+        if (!requestControls.shouldSend || requestControls.abortRequest) {
+            // [CUSTOM] pending actions and dirty props stay queued for the next
+            // request, which also resolves the promises handed out for this one
+            this.nextRequestPromise.then(thisPromiseResolve);
+
             return;
         }
 
-        // [CUSTOM] Snapshot the navigation epoch so a late response can detect
+        // [CUSTOM] Remember the history entry, so a late response can detect
         // that the user navigated away while the request was in flight.
-        const requestNavigationEpoch = navigationEpoch;
+        const historyEntryKey = this.getCurrentHistoryEntryKey();
 
         this.backendRequest = this.backend.makeRequest(
             requestConfig.props,
@@ -478,12 +474,12 @@ export default class Component {
             }
 
             const liveUrl = backendResponse.getLiveUrl();
-            // [CUSTOM] A response arriving during or after a navigation must not
-            // rewrite the new history entry: apply the LiveUrl only if the
-            // component is still in the document and no navigation happened since
-            // the request was sent. Only the history update is skipped — the
-            // response is still processed.
-            if (liveUrl && this.element.isConnected && navigationEpoch === requestNavigationEpoch) {
+            // [CUSTOM] A response arriving after a navigation must not rewrite the
+            // new history entry: apply the LiveUrl only if the component is still
+            // in the document and the history entry did not change since the
+            // request was sent. Only the history update is skipped, the response
+            // is still processed.
+            if (liveUrl && this.element.isConnected && this.getCurrentHistoryEntryKey() === historyEntryKey) {
                 history.replaceState(
                     history.state,
                     '',
@@ -705,6 +701,15 @@ export default class Component {
         this.nextRequestPromise = new Promise((resolve) => {
             this.nextRequestPromiseResolve = resolve;
         });
+    }
+
+    /**
+     * [CUSTOM] Key of the current history entry (Navigation API), or null when
+     * the browser does not support it. The key survives history.replaceState(),
+     * and changes on a new entry and on back/forward.
+     */
+    private getCurrentHistoryEntryKey(): string | null {
+        return (window as any).navigation?.currentEntry?.key ?? null;
     }
 
     /**

@@ -109,7 +109,7 @@ export function executeMorphdom(
                 throw new Error('The data-live-preserve attribute requires an id attribute to be set on the element');
             }
 
-            const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
+            const oldElement = rootFromElement.querySelector(`#${CSS.escape(id)}`); // [CUSTOM] CSS.escape
             if (!(oldElement instanceof HTMLElement)) {
                 throw new Error(`The element with id "${id}" was not found in the original HTML`);
             }
@@ -312,7 +312,7 @@ export function executeMorphdom(
         });
 
         originalElementIdsToSwapAfter.forEach((id: string) => {
-            const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`);
+            const newElement = rootFromElement.querySelector(`#${CSS.escape(id)}`); // [CUSTOM] CSS.escape
             const originalElement = originalElementsToPreserve.get(id);
             if (!(newElement instanceof HTMLElement) || !(originalElement instanceof HTMLElement)) {
                 // should not happen

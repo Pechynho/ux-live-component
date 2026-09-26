@@ -21,7 +21,35 @@ Rozšíření TypeScript části live components o funkce, které upstream nepos
 
 ## Přehled custom změn
 
-Všechny custom úpravy jsou označené komentářem `[CUSTOM]` v kódu.
+Všechny custom úpravy jsou označené komentářem `[CUSTOM]` v kódu. **Každou novou odchylku od upstreamu zapiš do tabulky „Inventář odchylek“ níže (soubor, řádek, co, proč, upstream PR/issue).**
+
+### Inventář odchylek od upstreamu
+
+Řádky platí k verzi `3.5.2-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
+
+```bash
+grep -rn "\[CUSTOM\]" assets/src assets/test          # všechny označené úpravy
+git fetch upstream && git diff upstream/3.x --stat -- . ':!assets/dist' ':!assets/yarn.lock'   # všechny změněné soubory
+git diff -U0 upstream/3.x -- assets/src                # přesné hunky
+```
+
+| # | Soubor:řádek | Co | Upstream PR / issue | Odstranit, až… |
+|---|---|---|---|---|
+| 1 | `assets/src/Component/index.ts:241-261` | `Component.request()` (raw `Response`, bez re-renderu) | — (upstream alternativa: [PR #3931](https://github.com/symfony/ux/pull/3931) `LiveResponse::data()`, [#2967](https://github.com/symfony/ux/pull/2967)) | #3931 se mergne a aplikace přejdou na `LiveResponse::data()` |
+| 2 | `assets/src/Component/index.ts:26-30` (typ), `:394-404` (`performRequest()`) | `request:started` → `controls.shouldSend` / `abortRequest` (BC) | [PR #3929](https://github.com/symfony/ux/pull/3929) (`shouldSend`) | #3929 se mergne a aplikace přejdou z `abortRequest` na `shouldSend = false` |
+| 3 | `assets/src/Component/index.ts:34-35` (typ), `:441-453` (`performRequest()`) | `response:error` → `controls.resetLoadingState` | [PR #3926](https://github.com/symfony/ux/pull/3926) (oprava bez volby, loading stav se ukončí vždy) | #3926 se mergne |
+| 4 | `assets/src/Component/index.ts:31-32` | `render:started` v typu `ComponentHooks` | [PR #3922](https://github.com/symfony/ux/pull/3922) | #3922 se mergne |
+| 5 | `assets/src/Component/index.ts:47-59`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) (exportuje jen `ComponentHooks`) | aliasy si můžeme nechat; po #3930 jsou jen zkratky |
+| 6 | `assets/src/morphdom.ts:71-77, 94, 112, 138, 257-273, 315, 324-328`, `assets/src/live_controller.ts:98-102` | obnova `data-live-preserve` po `innerHTML` swapu + event `live:preserve-restored` + re-render; `CSS.escape` | [#3423](https://github.com/symfony/ux/issues/3423) — případ se změnou `id` rodiče upstream vyřešil upgradem na Idiomorph 0.7.4 ([PR #3868](https://github.com/symfony/ux/pull/3868)) | nejspíš už teď zbytečné (ověřit a odstranit) |
+| 6b | `assets/src/Component/plugins/ChildComponentPlugin.ts:46-51, 62-74` | potomci uvnitř `data-skip-morph` se nefingerprintují | [PR #3924](https://github.com/symfony/ux/pull/3924) (Fix #3423, přesnější varianta) | #3924 se mergne |
+| 6c | `assets/src/Component/plugins/PageUnloadingPlugin.ts:9-10`, `assets/src/dom_utils.ts:55` | typové opravy kvůli `strict` tsconfigu | PageUnloadingPlugin: [PR #3922](https://github.com/symfony/ux/pull/3922) | #3922 se mergne (dom_utils cast zůstává, dokud upstream nezapne strict) |
+| 6d | `assets/src/live_controller.ts:116-124` (`connect()`) | stale `ValueStore` po reconnectu | [#3424](https://github.com/symfony/ux/issues/3424), [PR #3537](https://github.com/symfony/ux/pull/3537) (jiný autor) | #3537 se mergne |
+| 7 | `assets/src/Component/index.ts:406-408, 477-482, 706-713` | LiveUrl nepřepíše URL po navigaci (klíč z Navigation API + `isConnected`) | [PR #3928](https://github.com/symfony/ux/pull/3928) | #3928 se mergne |
+| 8 | `.github/workflows/sync-upstream.yml` | denní sync z upstreamu | — | nikdy |
+| 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty) | standalone build a testy | — | nikdy |
+| 10 | `assets/test/unit/controller/live-url-navigation.test.ts`, `assets/test/unit/Component/request-started.test.ts` | testy custom změn 2 a 7 | — | s příslušnou změnou |
+
+Další otevřené upstream PR z našich oprav, které ve forku nemáme (fork je zatím nepotřebuje): [#3923](https://github.com/symfony/ux/pull/3923) (request z fronty po chybě), [#3925](https://github.com/symfony/ux/pull/3925) (výpadek sítě, Fix [#1986](https://github.com/symfony/ux/issues/1986); souvisí s [PR #3535](https://github.com/symfony/ux/pull/3535)), [#3927](https://github.com/symfony/ux/pull/3927) (`getAttribute('id')` místo `.id`), [#3931](https://github.com/symfony/ux/pull/3931) (`LiveResponse::data()`). Pracovní kopie monorepa s větvemi: `~/projects/symfony-ux` (fork `Pechynho/ux`).
 
 ### 1. `Component.request()` — standalone request bez re-renderu
 
@@ -38,16 +66,20 @@ const response = await component.request('myAction', { foo: 'bar' });
 const data = await response.json();
 ```
 
-### 2. `request:started` hook — `controls.abortRequest`
+Známé omezení: `request()` posílá jen dirty props, ne hodnoty, které jsou zrovna pending v jiném requestu.
 
-**Soubor:** `assets/src/Component/index.ts`, metoda `performRequest()`
+### 2. `request:started` hook — `controls.shouldSend` (a starší `abortRequest`)
 
-Hook `request:started` nyní dostává druhý argument `controls: { abortRequest: boolean }`. Nastavením `abortRequest = true` v hook callbacku se request nepošle. Dirty props a pending actions zůstanou zachovány.
+**Soubor:** `assets/src/Component/index.ts`, metoda `performRequest()`, test `assets/test/unit/Component/request-started.test.ts`
+
+Hook `request:started` dostává druhý argument `controls: { shouldSend: boolean; abortRequest: boolean }`. Nastavením `shouldSend = false` (nebo starším `abortRequest = true`, deprecated) se request nepošle a loading stav nezačne. Dirty props a pending actions zůstanou a odejdou s dalším requestem; promise zrušeného requestu se vyřeší odpovědí toho dalšího (do 3.5.1-pechynho se nevyřešila nikdy).
+
+`shouldSend` je název z upstream PR [#3929](https://github.com/symfony/ux/pull/3929). `abortRequest` zůstává kvůli aplikacím (onlytraining.io), odstranit až po přechodu na `shouldSend`.
 
 ```typescript
 component.on('request:started', (requestConfig, controls) => {
-    if (shouldPreventRequest()) {
-        controls.abortRequest = true;
+    if (!navigator.onLine) {
+        controls.shouldSend = false;
     }
 });
 ```
@@ -129,14 +161,14 @@ Upstream issue: [symfony/ux#3424](https://github.com/symfony/ux/issues/3424) (op
 
 ### 7. Fix LiveUrl `history.replaceState` po navigaci (race)
 
-**Soubory:** `assets/src/Component/index.ts` (metoda `performRequest()` + module-level `navigationEpoch`), test `assets/test/unit/controller/live-url-navigation.test.ts`
+**Soubory:** `assets/src/Component/index.ts` (metoda `performRequest()` + privátní `getCurrentHistoryEntryKey()`), test `assets/test/unit/controller/live-url-navigation.test.ts`. Upstream PR [#3928](https://github.com/symfony/ux/pull/3928).
 
 Oprava race condition: pokud live response (hlavička `X-Live-Url`) doletěla během navigace nebo po ní (Turbo visit, history back/forward), bezpodmínečný `history.replaceState` přepsal URL history entry **cílové** stránky na URL stránky původní.
 
 Invariant: LiveUrl update je platný jen tehdy, když history entry v momentě response je tatáž jako v momentě odeslání requestu. Implementace:
-- Module-level čítač `navigationEpoch` inkrementovaný na eventy `popstate` a `turbo:visit` (listenery na `window`; Turbo se neimportuje — v aplikaci bez Turba event nikdy nevystřelí a chování se nemění).
-- `performRequest()` si při odeslání zapamatuje aktuální epochu; pokud se při response liší, `history.replaceState` se přeskočí.
-- Navíc se přeskočí i při `this.element.isConnected === false` (stale response po výměně DOM, kterou eventy nepokryjí).
+- `performRequest()` si při odeslání zapamatuje klíč aktuální history entry z Navigation API (`navigation.currentEntry.key`). `replaceState` klíč nemění, nový entry (Turbo visit, `pushState`) a back/forward ano. Pokud se klíč při response liší, `history.replaceState` se přeskočí.
+- Navíc se přeskočí i při `this.element.isConnected === false` (jediná kontrola v prohlížečích bez Navigation API; pokryje Turbo visit, který už vyměnil stránku).
+- Do 3.5.1-pechynho to byl globální čítač na `popstate`/`turbo:visit`. Byl chybný: `turbo:visit` vystřelí už při startu fetch nové stránky, takže zahodil i update URL, který ještě patřil ke staré stránce.
 
 Když guard nepustí, přeskočí se POUZE `history.replaceState` — zbytek zpracování response (re-render, resolve promise) běží beze změny.
 

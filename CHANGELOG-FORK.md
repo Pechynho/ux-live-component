@@ -5,6 +5,19 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.5.2-pechynho
+
+- `request:started`: new `controls.shouldSend` flag (the name used in upstream
+  PR symfony/ux#3929); `controls.abortRequest` still works but is deprecated.
+  Fix: the promise of a canceled request (`render()`, `action()`, `set()`) now
+  resolves with the response of the next request (before it never resolved).
+- LiveUrl guard now compares the history entry key (Navigation API) instead of
+  a global `popstate`/`turbo:visit` counter, as in upstream PR symfony/ux#3928.
+  Fixes URL updates being dropped when a response arrived after `turbo:visit`
+  but before Turbo replaced the page.
+- CLAUDE.md: inventory of all differences from upstream (file:line, upstream
+  PR/issue, when to remove), links to the upstream PRs #3922-#3931.
+
 ## 3.5.1-pechynho
 
 - Sync with upstream `v3.5.1` (Idiomorph 0.7.4, `LiveResponse::remove()`,
