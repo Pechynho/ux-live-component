@@ -102,7 +102,9 @@ component.on('request:started', myHook);
 
 Oprava bugu, kdy elementy s `data-live-preserve` ztratily svůj DOM stav (event listenery, JS stav apod.), pokud se u libovolného nadřazeného elementu změnilo `id` mezi re-rendery. Příčina: `innerHTML` swap v `beforeNodeMorphed` callbacku obcházel Idiomorph callbacky, takže preserved elementy byly tiše nahrazeny čerstvě naparsovanými nody.
 
-Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem. Na obnovený element se po dokončení morphu dispatchne event `live:preserve-restored`. ID v selektorech se escapují přes `CSS.escape()`.
+Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem. Na obnovený element se po dokončení morphu dispatchne event `live:preserve-restored`; `live_controller.ts` na něj poslouchá a komponentu (v `setTimeout`, až po reconnect cyklu Stimulu) znovu vyrenderuje, aby měla čerstvý stav ze serveru. ID v selektorech se escapují přes `CSS.escape()`.
+
+Upstream issue: [symfony/ux#3423](https://github.com/symfony/ux/issues/3423) (open, bez upstream fixu).
 
 Upstream (od 3.5) obaluje celé tělo `executeMorphdom()` do `try/finally` (dočasné vracení serverových ID u externě změněných elementů) — custom kód je uvnitř toho bloku. Bug s `innerHTML` swapem upstream k 3.5.1 stále má.
 
@@ -110,7 +112,15 @@ Upstream (od 3.5) obaluje celé tělo `executeMorphdom()` do `try/finally` (doč
 
 **Soubor:** `assets/src/Component/plugins/ChildComponentPlugin.ts`
 
-Child komponenty uvnitř elementu s `data-skip-morph` (relativně k rodičovské komponentě) se neposílají v `children` fingerprintech. Jejich obsah se stejně zahodí `innerHTML` swapem, takže server je musí vyrenderovat celé místo toho, aby vrátil prázdný `data-live-preserve` placeholder.
+Child komponenty uvnitř elementu s `data-skip-morph` (relativně k rodičovské komponentě) se neposílají v `children` fingerprintech. Jejich obsah se stejně zahodí `innerHTML` swapem, takže server je musí vyrenderovat celé místo toho, aby vrátil prázdný `data-live-preserve` placeholder. (Case 1 v komentáři k [#3423](https://github.com/symfony/ux/issues/3423).)
+
+### 6d. Stale `ValueStore` po reconnectu controlleru
+
+**Soubor:** `assets/src/live_controller.ts`, metoda `connect()`
+
+Stimulus při disconnect → connect na stejném elementu nevolá znovu `initialize()`, takže přežije starý `Component` i jeho `ValueStore` se zastaralými props → chyby `Invalid model name`. `connect()` teď porovná aktuální `propsValue` s původními props ve `ValueStore` a při rozdílu zavolá `createComponent()`.
+
+Upstream issue: [symfony/ux#3424](https://github.com/symfony/ux/issues/3424) (open), upstream PR [#3537](https://github.com/symfony/ux/pull/3537) (open, jiný autor). Až se PR mergne, custom kód odstranit.
 
 ### 6c. Drobné typové opravy (kvůli `strict` tsconfigu)
 
