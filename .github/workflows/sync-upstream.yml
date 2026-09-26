@@ -51,6 +51,18 @@ jobs:
             # Check which files are conflicted
             CONFLICTED=$(git diff --name-only --diff-filter=U)
 
+            # Upstream occasionally rewrites the history of the subtree split.
+            # The merge-base then falls back to an ancient commit and most files
+            # conflict as add/add (no common ancestor version). A PR with
+            # hundreds of conflicts is useless — sync manually instead: find the
+            # rewritten counterpart of the last merged upstream commit (same
+            # tree), record it with `git merge -s ours <sha>`, then merge.
+            ADD_ADD=$(git ls-files -u | awk '{print $3" "$4}' | sort -u | awk '{s[$2]=s[$2]" "$1} END {for (f in s) if (s[f] !~ / 1/) n++; print n+0}')
+            if [ "$ADD_ADD" -gt 10 ]; then
+              echo "::error::$ADD_ADD files conflict as add/add — upstream history was probably rewritten. Sync manually (see comment in the workflow)."
+              exit 1
+            fi
+
             # Determine if all conflicts are auto-resolvable:
             # - assets/dist/* → will be rebuilt
             # - .github/*    → will be cleaned up (fork deletes upstream .github files)
@@ -173,4 +185,7 @@ jobs:
             cat pr_error.log
             echo "::warning::Could not create PR automatically. Enable 'Allow GitHub Actions to create and approve pull requests' in Settings → Actions → General → Workflow permissions, or open the PR manually:"
             echo "::warning::https://github.com/$REPO/compare/3.x...$BRANCH?expand=1"
+            # Fail the run so the conflict does not go unnoticed (a green run
+            # would hide that the fork has stopped syncing).
+            exit 1
           fi
