@@ -15,6 +15,11 @@ via `dev-3.x` (always the latest commit); the versions below refer to
   with `-s ours` and upstream was then merged on top.
 - Custom `data-live-preserve` innerHTML-restore fix re-applied onto the new
   upstream `morphdom.ts` (now wrapped in the external-id `try/finally`).
+- `tsconfig.json` aligned with upstream (`strict`, `noUnusedLocals`, target
+  ES2022 — the dist now uses native class fields like upstream's); fixed the
+  two resulting type errors.
+- Sync workflow now fails loudly on rewritten upstream history or when the
+  conflict PR cannot be created; actions bumped to Node 22.
 
 ## 3.0.1-pechynho
 

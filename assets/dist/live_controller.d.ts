@@ -329,15 +329,15 @@ declare class LiveControllerDefault extends Controller<HTMLElement> implements L
         };
         listeners: {
             type: ArrayConstructor;
-            default: any[];
+            default: never[];
         };
         eventsToEmit: {
             type: ArrayConstructor;
-            default: any[];
+            default: never[];
         };
         eventsToDispatch: {
             type: ArrayConstructor;
-            default: any[];
+            default: never[];
         };
         debounce: {
             type: NumberConstructor;

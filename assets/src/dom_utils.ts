@@ -52,7 +52,7 @@ export function getValueFromElement(element: HTMLElement, valueStore: ValueStore
 
     // element is some other element
     if (element.hasAttribute('data-value')) {
-        return element.dataset.value;
+        return element.dataset.value as string; // [CUSTOM] cast: checked by hasAttribute() above
     }
 
     // e.g. a textarea

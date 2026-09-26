@@ -3,8 +3,11 @@ import { Controller } from "@hotwired/stimulus";
 
 // src/Backend/BackendRequest.ts
 var BackendRequest_default = class {
+  promise;
+  actions;
+  updatedModels;
+  isResolved = false;
   constructor(promise, actions, updateModels) {
-    this.isResolved = false;
     this.promise = promise;
     this.promise.then((response) => {
       this.isResolved = true;
@@ -29,6 +32,9 @@ var BackendRequest_default = class {
 
 // src/Backend/RequestBuilder.ts
 var RequestBuilder_default = class {
+  url;
+  method;
+  credentials;
   constructor(url, method = "post", credentials = "same-origin") {
     this.url = url;
     this.method = method;
@@ -108,6 +114,7 @@ var RequestBuilder_default = class {
 
 // src/Backend/Backend.ts
 var Backend_default = class {
+  requestBuilder;
   constructor(url, method = "post", credentials = "same-origin") {
     this.requestBuilder = new RequestBuilder_default(url, method, credentials);
   }
@@ -130,9 +137,12 @@ var Backend_default = class {
 
 // src/Backend/BackendResponse.ts
 var BackendResponse_default = class {
+  response;
+  body;
+  liveUrl;
+  download = null;
+  parsePromise = null;
   constructor(response) {
-    this.download = null;
-    this.parsePromise = null;
     this.response = response;
   }
   async getBody() {
@@ -580,9 +590,7 @@ function isNumericalInputElement(element) {
 
 // src/HookManager.ts
 var HookManager_default = class {
-  constructor() {
-    this.hooks = /* @__PURE__ */ new Map();
-  }
+  hooks = /* @__PURE__ */ new Map();
   register(hookName, callback) {
     const hooks = this.hooks.get(hookName) || [];
     hooks.push(callback);
@@ -693,7 +701,7 @@ var Idiomorph = (function() {
         oldParent = oldParent.content;
         newParent = newParent.content;
       }
-      insertionPoint || (insertionPoint = oldParent.firstChild);
+      insertionPoint ||= oldParent.firstChild;
       for (const newChild of newParent.childNodes) {
         if (insertionPoint && insertionPoint != endPoint) {
           const bestMatch = findBestMatch(
@@ -1555,11 +1563,9 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
 
 // src/Rendering/ChangingItemsTracker.ts
 var ChangingItemsTracker_default = class {
-  constructor() {
-    // e.g. a Map with key "color" & value { original: 'previousValue', new: 'newValue' },
-    this.changedItems = /* @__PURE__ */ new Map();
-    this.removedItems = /* @__PURE__ */ new Map();
-  }
+  // e.g. a Map with key "color" & value { original: 'previousValue', new: 'newValue' },
+  changedItems = /* @__PURE__ */ new Map();
+  removedItems = /* @__PURE__ */ new Map();
   /**
    * A "null" previousValue means the item was NOT previously present.
    */
@@ -1609,12 +1615,10 @@ var ChangingItemsTracker_default = class {
 
 // src/Rendering/ElementChanges.ts
 var ElementChanges = class {
-  constructor() {
-    this.addedClasses = /* @__PURE__ */ new Set();
-    this.removedClasses = /* @__PURE__ */ new Set();
-    this.styleChanges = new ChangingItemsTracker_default();
-    this.attributeChanges = new ChangingItemsTracker_default();
-  }
+  addedClasses = /* @__PURE__ */ new Set();
+  removedClasses = /* @__PURE__ */ new Set();
+  styleChanges = new ChangingItemsTracker_default();
+  attributeChanges = new ChangingItemsTracker_default();
   addClass(className) {
     if (!this.removedClasses.delete(className)) {
       this.addedClasses.add(className);
@@ -1682,14 +1686,17 @@ var ElementChanges = class {
 
 // src/Rendering/ExternalMutationTracker.ts
 var ExternalMutationTracker_default = class {
+  element;
+  shouldTrackChangeCallback;
+  mutationObserver;
+  changedElements = /* @__PURE__ */ new WeakMap();
+  /** For testing */
+  changedElementsCount = 0;
+  addedElements = [];
+  removedElements = [];
+  isStarted = false;
+  originalIds = /* @__PURE__ */ new Map();
   constructor(element, shouldTrackChangeCallback) {
-    this.changedElements = /* @__PURE__ */ new WeakMap();
-    /** For testing */
-    this.changedElementsCount = 0;
-    this.addedElements = [];
-    this.removedElements = [];
-    this.isStarted = false;
-    this.originalIds = /* @__PURE__ */ new Map();
     this.element = element;
     this.shouldTrackChangeCallback = shouldTrackChangeCallback;
     this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
@@ -1915,10 +1922,14 @@ var ExternalMutationTracker_default = class {
 
 // src/Component/UnsyncedInputsTracker.ts
 var UnsyncedInputsTracker_default = class {
+  component;
+  modelElementResolver;
+  /** Fields that have changed, but whose value is not set back onto the value store */
+  unsyncedInputs;
+  elementEventListeners = [
+    { event: "input", callback: (event) => this.handleInputEvent(event) }
+  ];
   constructor(component, modelElementResolver) {
-    this.elementEventListeners = [
-      { event: "input", callback: (event) => this.handleInputEvent(event) }
-    ];
     this.component = component;
     this.modelElementResolver = modelElementResolver;
     this.unsyncedInputs = new UnsyncedInputContainer();
@@ -1964,9 +1975,10 @@ var UnsyncedInputsTracker_default = class {
   }
 };
 var UnsyncedInputContainer = class {
+  unsyncedModelFields;
+  unsyncedNonModelFields = [];
+  unsyncedModelNames = [];
   constructor() {
-    this.unsyncedNonModelFields = [];
-    this.unsyncedModelNames = [];
     this.unsyncedModelFields = /* @__PURE__ */ new Map();
   }
   add(element, modelName = null) {
@@ -2034,28 +2046,28 @@ var parseDeepData = (data, propertyPath) => {
 
 // src/Component/ValueStore.ts
 var ValueStore_default = class {
+  /**
+   * Original, read-only props that represent the original component state.
+   *
+   * @private
+   */
+  props = {};
+  /**
+   * A list of props that have been "dirty" (changed) since the last request to the server.
+   */
+  dirtyProps = {};
+  /**
+   * A list of dirty props that were sent to the server, but the response has
+   * not yet been received.
+   */
+  pendingProps = {};
+  /**
+   * A list of props that the parent wants us to update.
+   *
+   * These will be sent on the next request to the server.
+   */
+  updatedPropsFromParent = {};
   constructor(props) {
-    /**
-     * Original, read-only props that represent the original component state.
-     *
-     * @private
-     */
-    this.props = {};
-    /**
-     * A list of props that have been "dirty" (changed) since the last request to the server.
-     */
-    this.dirtyProps = {};
-    /**
-     * A list of dirty props that were sent to the server, but the response has
-     * not yet been received.
-     */
-    this.pendingProps = {};
-    /**
-     * A list of props that the parent wants us to update.
-     *
-     * These will be sent on the next request to the server.
-     */
-    this.updatedPropsFromParent = {};
     this.props = props;
   }
   /**
@@ -2166,6 +2178,39 @@ if (typeof window !== "undefined") {
   window.addEventListener("turbo:visit", bumpNavigationEpoch);
 }
 var Component = class {
+  element;
+  name;
+  // key is the string event name and value is an array of action names
+  listeners;
+  backend;
+  elementDriver;
+  id;
+  /**
+   * A fingerprint that identifies the props/input that was used on
+   * the server to create this component, especially if it was a
+   * child component. This is sent back to the server and can be used
+   * to determine if any "input" to the child component changed and thus,
+   * if the child component needs to be re-rendered.
+   */
+  fingerprint = "";
+  valueStore;
+  unsyncedInputsTracker;
+  hooks;
+  defaultDebounce = 150;
+  backendRequest = null;
+  /** Actions that are waiting to be executed */
+  pendingActions = [];
+  /** Files that are waiting to be sent */
+  pendingFiles = {};
+  /** Is a request waiting to be made? */
+  isRequestPending = false;
+  /** Once removed, the component is done: it must never talk to the server again. */
+  isRemoved = false;
+  /** Current "timeout" before the pending request should be sent. */
+  requestDebounceTimeout = null;
+  nextRequestPromise;
+  nextRequestPromiseResolve;
+  externalMutationTracker;
   /**
    * @param element The root element
    * @param name    The name of the component
@@ -2176,26 +2221,6 @@ var Component = class {
    * @param elementDriver Class to get "model" name from any element.
    */
   constructor(element, name, props, listeners, id, backend, elementDriver) {
-    /**
-     * A fingerprint that identifies the props/input that was used on
-     * the server to create this component, especially if it was a
-     * child component. This is sent back to the server and can be used
-     * to determine if any "input" to the child component changed and thus,
-     * if the child component needs to be re-rendered.
-     */
-    this.fingerprint = "";
-    this.defaultDebounce = 150;
-    this.backendRequest = null;
-    /** Actions that are waiting to be executed */
-    this.pendingActions = [];
-    /** Files that are waiting to be sent */
-    this.pendingFiles = {};
-    /** Is a request waiting to be made? */
-    this.isRequestPending = false;
-    /** Once removed, the component is done: it must never talk to the server again. */
-    this.isRemoved = false;
-    /** Current "timeout" before the pending request should be sent. */
-    this.requestDebounceTimeout = null;
     this.element = element;
     this.name = name;
     this.backend = backend;
@@ -2678,6 +2703,7 @@ function triggerDownload(download) {
 
 // src/Component/ElementDriver.ts
 var StimulusElementDriver = class {
+  controller;
   constructor(controller) {
     this.controller = controller;
   }
@@ -2761,8 +2787,9 @@ function get_model_binding_default(modelDirective) {
 
 // src/Component/plugins/ChildComponentPlugin.ts
 var ChildComponentPlugin_default = class {
+  component;
+  parentModelBindings = [];
   constructor(component) {
-    this.parentModelBindings = [];
     this.component = component;
     const modelDirectives = getAllModelDirectiveFromElements(this.component.element);
     this.parentModelBindings = modelDirectives.map(get_model_binding_default);
@@ -2830,9 +2857,7 @@ var ChildComponentPlugin_default = class {
 
 // src/Component/plugins/LazyPlugin.ts
 var LazyPlugin_default = class {
-  constructor() {
-    this.intersectionObserver = null;
-  }
+  intersectionObserver = null;
   attachToComponent(component) {
     if ("lazy" !== component.element.attributes.getNamedItem("loading")?.value) {
       return;
@@ -3037,11 +3062,9 @@ var parseLoadingAction = (action, isLoading) => {
 
 // src/Component/plugins/PageUnloadingPlugin.ts
 var PageUnloadingPlugin_default = class {
-  constructor() {
-    this.isConnected = false;
-  }
+  isConnected = false;
   attachToComponent(component) {
-    component.on("render:started", (html, response, controls) => {
+    component.on("render:started", (html, backendResponse, controls) => {
       if (!this.isConnected) {
         controls.shouldRender = false;
       }
@@ -3057,9 +3080,11 @@ var PageUnloadingPlugin_default = class {
 
 // src/PollingDirector.ts
 var PollingDirector_default = class {
+  component;
+  isPollingActive = true;
+  polls;
+  pollingIntervals = [];
   constructor(component) {
-    this.isPollingActive = true;
-    this.pollingIntervals = [];
     this.component = component;
   }
   addPoll(actionName, duration) {
@@ -3108,6 +3133,8 @@ var PollingDirector_default = class {
 
 // src/Component/plugins/PollingPlugin.ts
 var PollingPlugin_default = class {
+  element;
+  pollingDirector;
   attachToComponent(component) {
     this.element = component.element;
     this.pollingDirector = new PollingDirector_default(component);
@@ -3220,21 +3247,37 @@ var ValidatedFieldsPlugin_default = class {
 };
 
 // src/live_controller.ts
-var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
-  constructor() {
-    super(...arguments);
-    this.pendingActionTriggerModelElement = null;
-    this.elementEventListeners = [
-      { event: "input", callback: (event) => this.handleInputEvent(event) },
-      { event: "change", callback: (event) => this.handleChangeEvent(event) },
-      // [CUSTOM] When this component's element is restored via innerHTML swap
-      // in morphdom (data-live-preserve), re-render to get fresh server state.
-      // setTimeout defers until after Stimulus MutationObserver processes the
-      // disconnect/connect cycle caused by the temporary DOM removal.
-      { event: "live:preserve-restored", callback: () => setTimeout(() => this.component.render(), 0) }
-    ];
-    this.pendingFiles = {};
-  }
+var LiveControllerDefault = class _LiveControllerDefault extends Controller {
+  static values = {
+    name: String,
+    url: String,
+    props: { type: Object, default: {} },
+    propsUpdatedFromParent: { type: Object, default: {} },
+    listeners: { type: Array, default: [] },
+    eventsToEmit: { type: Array, default: [] },
+    eventsToDispatch: { type: Array, default: [] },
+    debounce: { type: Number, default: 150 },
+    fingerprint: { type: String, default: "" },
+    requestMethod: { type: String, default: "post" },
+    fetchCredentials: { type: String, default: "same-origin" }
+  };
+  /** The component, wrapped in the convenience Proxy */
+  proxiedComponent;
+  mutationObserver;
+  /** The raw Component object */
+  component;
+  pendingActionTriggerModelElement = null;
+  elementEventListeners = [
+    { event: "input", callback: (event) => this.handleInputEvent(event) },
+    { event: "change", callback: (event) => this.handleChangeEvent(event) },
+    // [CUSTOM] When this component's element is restored via innerHTML swap
+    // in morphdom (data-live-preserve), re-render to get fresh server state.
+    // setTimeout defers until after Stimulus MutationObserver processes the
+    // disconnect/connect cycle caused by the temporary DOM removal.
+    { event: "live:preserve-restored", callback: () => setTimeout(() => this.component.render(), 0) }
+  ];
+  pendingFiles = {};
+  static backendFactory = (controller) => new Backend_default(controller.urlValue, controller.requestMethodValue, controller.fetchCredentialsValue);
   initialize() {
     this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
     this.createComponent();
@@ -3554,21 +3597,6 @@ var _LiveControllerDefault = class _LiveControllerDefault extends Controller {
     });
   }
 };
-_LiveControllerDefault.values = {
-  name: String,
-  url: String,
-  props: { type: Object, default: {} },
-  propsUpdatedFromParent: { type: Object, default: {} },
-  listeners: { type: Array, default: [] },
-  eventsToEmit: { type: Array, default: [] },
-  eventsToDispatch: { type: Array, default: [] },
-  debounce: { type: Number, default: 150 },
-  fingerprint: { type: String, default: "" },
-  requestMethod: { type: String, default: "post" },
-  fetchCredentials: { type: String, default: "same-origin" }
-};
-_LiveControllerDefault.backendFactory = (controller) => new Backend_default(controller.urlValue, controller.requestMethodValue, controller.fetchCredentialsValue);
-var LiveControllerDefault = _LiveControllerDefault;
 export {
   Component,
   LiveControllerDefault as default,

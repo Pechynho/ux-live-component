@@ -102,7 +102,20 @@ component.on('request:started', myHook);
 
 Oprava bugu, kdy elementy s `data-live-preserve` ztratily svůj DOM stav (event listenery, JS stav apod.), pokud se u libovolného nadřazeného elementu změnilo `id` mezi re-rendery. Příčina: `innerHTML` swap v `beforeNodeMorphed` callbacku obcházel Idiomorph callbacky, takže preserved elementy byly tiše nahrazeny čerstvě naparsovanými nody.
 
-Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem.
+Po `innerHTML` swapu se nyní obnoví preserved elementy, které byly uvnitř postiženého rodičovského elementu — nový placeholder se najde podle ID, synchronizují se atributy a nahradí se originálním elementem. Na obnovený element se po dokončení morphu dispatchne event `live:preserve-restored`. ID v selektorech se escapují přes `CSS.escape()`.
+
+Upstream (od 3.5) obaluje celé tělo `executeMorphdom()` do `try/finally` (dočasné vracení serverových ID u externě změněných elementů) — custom kód je uvnitř toho bloku. Bug s `innerHTML` swapem upstream k 3.5.1 stále má.
+
+### 6b. `data-skip-morph` — potomci se nefingerprintují
+
+**Soubor:** `assets/src/Component/plugins/ChildComponentPlugin.ts`
+
+Child komponenty uvnitř elementu s `data-skip-morph` (relativně k rodičovské komponentě) se neposílají v `children` fingerprintech. Jejich obsah se stejně zahodí `innerHTML` swapem, takže server je musí vyrenderovat celé místo toho, aby vrátil prázdný `data-live-preserve` placeholder.
+
+### 6c. Drobné typové opravy (kvůli `strict` tsconfigu)
+
+- `assets/src/Component/plugins/PageUnloadingPlugin.ts` — callback `render:started` má 2. argument `BackendResponse` (upstream tam má chybně `Response`; projeví se až díky custom typování hooku v `ComponentHooks`)
+- `assets/src/dom_utils.ts` — cast `element.dataset.value as string`
 
 ### 7. Fix LiveUrl `history.replaceState` po navigaci (race)
 
@@ -127,7 +140,25 @@ GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručn�
 - Stáhne commity z `symfony/ux-live-component:3.x` a provede merge
 - Konflikty v `assets/dist/` a `.github/` se řeší automaticky (dist se přebuildí, upstream .github soubory se smažou)
 - Po merge automaticky spustí `yarn install && yarn build` a commitne nový dist
-- Pokud merge selže kvůli konfliktu ve **zdrojových souborech** (`.ts`, `.php`, …), vytvoří PR k manuálnímu řešení
+- Pokud merge selže kvůli konfliktu ve **zdrojových souborech** (`.ts`, `.php`, …), force-pushne větev `upstream-sync` (s konfliktními markery) a vytvoří PR k manuálnímu řešení. Když PR vytvořit nejde, run **selže** (dřív zůstal zelený a sync měsíce stál bez povšimnutí). Vyžaduje v repu zapnuté *Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*.
+- Pokud víc než 10 souborů konfliktuje jako add/add, run selže s chybou — viz níže
+
+#### Přepsaná historie upstreamu
+
+Upstream subtree split občas přegeneruje historii větve `3.x` (nové SHA, stejný obsah — stalo se mezi 3.1.0 a 3.5.1). Merge-base pak spadne na prastarý commit a skoro každý soubor konfliktuje jako add/add. Ruční postup:
+
+```bash
+git fetch upstream
+# poslední upstream commit, který už máme mergnutý (2. rodič posledního upstream merge)
+OLD=<sha>
+# jeho přepsaný protějšek v upstream/3.x — stejná zpráva, strom musí být identický
+NEW=$(git log upstream/3.x --format=%H --grep="$(git log -1 --format=%s $OLD)" -F | head -1)
+git diff --stat $OLD $NEW          # musí být prázdné
+git merge -s ours $NEW -m "Merge upstream <verze> (rewritten history, identical tree)"
+git merge upstream/3.x             # teď už s normálním merge-base
+```
+
+Pak vyřešit konflikty, přebuildit `dist`, bumpnout verzi a doplnit `CHANGELOG-FORK.md`.
 - Nesynkuje upstream tagy (obsahují workflow soubory, které `GITHUB_TOKEN` nemůže pushovat)
 - Fork nepoužívá vlastní tagy — v composeru se odkazuje přes `dev-3.x`
 
@@ -137,12 +168,12 @@ Upstream buildí assets v monorepu `symfony/ux` přes `bin/build_package.ts`. Ta
 
 **Soubory:**
 - `assets/tsup.config.mjs` — konfigurace tsup bundleru
-- `assets/tsconfig.json` — standalone tsconfig (upstream odkazoval na monorepo)
+- `assets/tsconfig.json` — standalone tsconfig (upstream odkazoval na monorepo `tsconfig.package.json`; nastavení `strict`, `strictPropertyInitialization: false`, `noUnusedLocals`, target ES2022 odpovídají upstreamu). Typecheck: `npx tsc --noEmit -p .` (z `assets/`) musí projít bez chyb.
 - `assets/vitest.config.mjs` — standalone vitest config (upstream mergoval base config z monorepa)
 - `assets/test/setup.js` — kopie monorepo `test/setup.js` (jest-dom matchery)
 - `Makefile` — make targety
 
-**Příkazy:**
+**Příkazy:** `yarn` (v1) nemusí být v PATH — Makefile pak použije `npx -y yarn@1` (ručně stejně).
 
 ```bash
 # Přes Makefile (z rootu)
