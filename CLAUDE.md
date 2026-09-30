@@ -49,7 +49,26 @@ git diff -U0 upstream/3.x -- assets/src                # přesné hunky
 | 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty) | standalone build a testy | — | nikdy |
 | 10 | `assets/test/unit/controller/live-url-navigation.test.ts`, `assets/test/unit/Component/request-started.test.ts` | testy custom změn 2 a 7 | — | s příslušnou změnou |
 
-Další otevřené upstream PR z našich oprav, které ve forku nemáme (fork je zatím nepotřebuje): [#3923](https://github.com/symfony/ux/pull/3923) (request z fronty po chybě), [#3925](https://github.com/symfony/ux/pull/3925) (výpadek sítě, Fix [#1986](https://github.com/symfony/ux/issues/1986); souvisí s [PR #3535](https://github.com/symfony/ux/pull/3535)), [#3927](https://github.com/symfony/ux/pull/3927) (`getAttribute('id')` místo `.id`), [#3931](https://github.com/symfony/ux/pull/3931) (`LiveResponse::data()`). Pracovní kopie monorepa s větvemi: `~/projects/symfony-ux` (fork `Pechynho/ux`).
+### Naše upstream PR (symfony/ux)
+
+Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-09-30.
+
+| PR | Větev | Balíček | Co | Issue | Stav | Ve forku |
+|---|---|---|---|---|---|---|
+| [#3922](https://github.com/symfony/ux/pull/3922) | `types-render-started` | LiveComponent | `render:started` v typu `ComponentHooks` | — | schváleno | #4, 6c |
+| [#3923](https://github.com/symfony/ux/pull/3923) | `fix-queued-request-after-error` | LiveComponent | odeslání requestu z fronty po chybě | — | otázka zodpovězena | ne |
+| [#3924](https://github.com/symfony/ux/pull/3924) | `fix-preserve-skip-morph` | LiveComponent | potomci uvnitř `data-skip-morph` | Fix [#3423](https://github.com/symfony/ux/issues/3423) | schváleno | #6b |
+| [#3925](https://github.com/symfony/ux/pull/3925) | `fix-network-error-loading-state` | LiveComponent | vzpamatování po výpadku sítě | Fix [#1986](https://github.com/symfony/ux/issues/1986), souvisí [#3535](https://github.com/symfony/ux/pull/3535) | čeká | ne |
+| [#3926](https://github.com/symfony/ux/pull/3926) | `fix-loading-state-after-error` | LiveComponent | konec loading stavu po chybě | ([#1463](https://github.com/symfony/ux/issues/1463) zavřená) | schváleno | #3 (`resetLoadingState`) |
+| [#3927](https://github.com/symfony/ux/pull/3927) | `fix-morph-form-id-shadowing` | LiveComponent | `getAttribute('id')` místo `.id` (formulář s polem `id`) | — | schváleno | ne |
+| [#3928](https://github.com/symfony/ux/pull/3928) | `fix-live-url-navigation` | LiveComponent | LiveUrl nepřepíše URL po navigaci | — | schváleno | #7 |
+| [#3929](https://github.com/symfony/ux/pull/3929) | `feat-request-should-send` | LiveComponent | `controls.shouldSend` v `request:started` | — | čeká | #2 |
+| [#3930](https://github.com/symfony/ux/pull/3930) | `feat-hook-types` | LiveComponent | export typu `ComponentHooks` | — | čeká | #5 |
+| [#3931](https://github.com/symfony/ux/pull/3931) | `feat-live-response-data` | LiveComponent | `LiveResponse::data()` (data z akce do JS) | souvisí [#2967](https://github.com/symfony/ux/pull/2967) | čeká | #1 (`request()`) |
+| [#4021](https://github.com/symfony/ux/pull/4021) | `fix-component-stack-unbalanced` | TwigComponent | komponenta nezůstane na `ComponentStack` po chybě v pre-renderu + `kernel.reset` | Fix [#3894](https://github.com/symfony/ux/issues/3894) | čeká | ne (jiný balíček) |
+| [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | čeká | ne |
+
+Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní. Související cizí PR: [#3537](https://github.com/symfony/ux/pull/3537) (stale `ValueStore`, odchylka 6d).
 
 ### 1. `Component.request()` — standalone request bez re-renderu
 
