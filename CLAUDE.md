@@ -69,6 +69,12 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | schváleno | ne |
 | [#4024](https://github.com/symfony/ux/pull/4024) | `fix-preserve-placeholder-explicit-id` | LiveComponent | placeholder potomka s explicitním `id` a změněnými props dostane `id` (chyba „data-live-preserve attribute requires an id“) | souvisí [#1643](https://github.com/symfony/ux/issues/1643) (zavřená bez opravy) | čeká | ne |
 
+**Naše RFC issue (návrhy před PR):**
+
+| Issue | Co | Stav |
+|---|---|---|
+| [#4025](https://github.com/symfony/ux/issues/4025) | `LiveResponse::skipRender()` + `LiveResponse::data(...)->withoutRender()`: akce aktualizuje props (a emity, LiveUrl) bez renderu šablony a bez morphu. Hlavička `X-Live-Skip-Render: 1`, tělo = prázdný kořenový element s live atributy. Otevřené otázky: `render:started`/`render:finished`, batch (přeskočit jen když všechny akce chtějí), kombinace s `data()`, název | čeká na maintainery, PR až po dohodě |
+
 Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní. Související cizí PR: [#3537](https://github.com/symfony/ux/pull/3537) (stale `ValueStore`, odchylka 6d).
 
 ### 1. `Component.request()` — standalone request bez re-renderu
