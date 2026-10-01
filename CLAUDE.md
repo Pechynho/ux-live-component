@@ -51,7 +51,7 @@ git diff -U0 upstream/3.x -- assets/src                # přesné hunky
 
 ### Naše upstream PR (symfony/ux)
 
-Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-09-30.
+Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-10-01.
 
 | PR | Větev | Balíček | Co | Issue | Stav | Ve forku |
 |---|---|---|---|---|---|---|
@@ -66,7 +66,8 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | [#3930](https://github.com/symfony/ux/pull/3930) | `feat-hook-types` | LiveComponent | export typu `ComponentHooks` | — | čeká | #5 |
 | [#3931](https://github.com/symfony/ux/pull/3931) | `feat-live-response-data` | LiveComponent | `LiveResponse::data()` (data z akce do JS) | souvisí [#2967](https://github.com/symfony/ux/pull/2967) | čeká | #1 (`request()`) |
 | [#4021](https://github.com/symfony/ux/pull/4021) | `fix-component-stack-unbalanced` | TwigComponent | komponenta nezůstane na `ComponentStack` po chybě v pre-renderu + `kernel.reset` | Fix [#3894](https://github.com/symfony/ux/issues/3894) | čeká | ne (jiný balíček) |
-| [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | čeká | ne |
+| [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | schváleno | ne |
+| [#4024](https://github.com/symfony/ux/pull/4024) | `fix-preserve-placeholder-explicit-id` | LiveComponent | placeholder potomka s explicitním `id` a změněnými props dostane `id` (chyba „data-live-preserve attribute requires an id“) | souvisí [#1643](https://github.com/symfony/ux/issues/1643) (zavřená bez opravy) | čeká | ne |
 
 Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní. Související cizí PR: [#3537](https://github.com/symfony/ux/pull/3537) (stale `ValueStore`, odchylka 6d).
 
