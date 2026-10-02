@@ -5,6 +5,16 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.5.3-pechynho
+
+- Sync with upstream `3.x`, which now contains our PRs symfony/ux#3922
+  (`render:started` in `ComponentHooks`), symfony/ux#3924 (children inside
+  `data-skip-morph` are not fingerprinted) and symfony/ux#3926 (the loading
+  state always finishes after an error response). The fork's own versions of
+  these changes were dropped in favour of upstream.
+- `response:error`: `controls.resetLoadingState` is now a deprecated no-op
+  (kept so applications that set it still type-check).
+
 ## 3.5.2-pechynho
 
 - `request:started`: new `controls.shouldSend` flag (the name used in upstream

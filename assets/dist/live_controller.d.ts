@@ -180,7 +180,7 @@ type ComponentHooks = {
     }) => MaybePromise;
     'render:finished': (component: Component) => MaybePromise;
     'response:error': (backendResponse: export_default$2, controls: {
-        displayError: boolean;
+        displayError: boolean; /** @deprecated no-op, the loading state is always finished */
         resetLoadingState: boolean;
     }) => MaybePromise;
     'loading.state:started': (element: HTMLElement, request: export_default$1) => MaybePromise;

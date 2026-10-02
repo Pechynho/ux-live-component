@@ -25,7 +25,7 @@ Všechny custom úpravy jsou označené komentářem `[CUSTOM]` v kódu. **Každ
 
 ### Inventář odchylek od upstreamu
 
-Řádky platí k verzi `3.5.2-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
+Řádky platí k verzi `3.5.3-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
 
 ```bash
 grep -rn "\[CUSTOM\]" assets/src assets/test          # všechny označené úpravy
@@ -35,31 +35,29 @@ git diff -U0 upstream/3.x -- assets/src                # přesné hunky
 
 | # | Soubor:řádek | Co | Upstream PR / issue | Odstranit, až… |
 |---|---|---|---|---|
-| 1 | `assets/src/Component/index.ts:241-261` | `Component.request()` (raw `Response`, bez re-renderu) | — (upstream alternativa: [PR #3931](https://github.com/symfony/ux/pull/3931) `LiveResponse::data()`, [#2967](https://github.com/symfony/ux/pull/2967)) | #3931 se mergne a aplikace přejdou na `LiveResponse::data()` |
-| 2 | `assets/src/Component/index.ts:26-30` (typ), `:394-404` (`performRequest()`) | `request:started` → `controls.shouldSend` / `abortRequest` (BC) | [PR #3929](https://github.com/symfony/ux/pull/3929) (`shouldSend`) | #3929 se mergne a aplikace přejdou z `abortRequest` na `shouldSend = false` |
-| 3 | `assets/src/Component/index.ts:34-35` (typ), `:441-453` (`performRequest()`) | `response:error` → `controls.resetLoadingState` | [PR #3926](https://github.com/symfony/ux/pull/3926) (oprava bez volby, loading stav se ukončí vždy) | #3926 se mergne |
-| 4 | `assets/src/Component/index.ts:31-32` | `render:started` v typu `ComponentHooks` | [PR #3922](https://github.com/symfony/ux/pull/3922) | #3922 se mergne |
-| 5 | `assets/src/Component/index.ts:47-59`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) (exportuje jen `ComponentHooks`) | aliasy si můžeme nechat; po #3930 jsou jen zkratky |
+| 1 | `assets/src/Component/index.ts:247-267` | `Component.request()` (raw `Response`, bez re-renderu) | — (upstream alternativa: [PR #3931](https://github.com/symfony/ux/pull/3931) `LiveResponse::data()`, [#2967](https://github.com/symfony/ux/pull/2967)) | #3931 se mergne a aplikace přejdou na `LiveResponse::data()` |
+| 2 | `assets/src/Component/index.ts:26-30` (typ), `:400-410` (`performRequest()`) | `request:started` → `controls.shouldSend` / `abortRequest` (BC) | [PR #3929](https://github.com/symfony/ux/pull/3929) (`shouldSend`) | #3929 se mergne a aplikace přejdou z `abortRequest` na `shouldSend = false` |
+| 3 | `assets/src/Component/index.ts:37-41` (typ), `:447-448` (`performRequest()`) | `response:error` → `controls.resetLoadingState` jako deprecated no-op (BC) | [PR #3926](https://github.com/symfony/ux/pull/3926) — mergnuto (3.5.3-pechynho), loading stav se ukončí vždy | aplikace přestanou nastavovat `resetLoadingState` |
+| 5 | `assets/src/Component/index.ts:53-65`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) (exportuje jen `ComponentHooks`) | aliasy si můžeme nechat; po #3930 jsou jen zkratky |
 | 6 | `assets/src/morphdom.ts:71-77, 94, 112, 138, 257-273, 315, 324-328`, `assets/src/live_controller.ts:98-102` | obnova `data-live-preserve` po `innerHTML` swapu + event `live:preserve-restored` + re-render; `CSS.escape` | [#3423](https://github.com/symfony/ux/issues/3423) — případ se změnou `id` rodiče upstream vyřešil upgradem na Idiomorph 0.7.4 ([PR #3868](https://github.com/symfony/ux/pull/3868)) | nejspíš už teď zbytečné (ověřit a odstranit) |
-| 6b | `assets/src/Component/plugins/ChildComponentPlugin.ts:46-51, 62-74` | potomci uvnitř `data-skip-morph` se nefingerprintují | [PR #3924](https://github.com/symfony/ux/pull/3924) (Fix #3423, přesnější varianta) | #3924 se mergne |
-| 6c | `assets/src/Component/plugins/PageUnloadingPlugin.ts:9-10`, `assets/src/dom_utils.ts:55` | typové opravy kvůli `strict` tsconfigu | PageUnloadingPlugin: [PR #3922](https://github.com/symfony/ux/pull/3922) | #3922 se mergne (dom_utils cast zůstává, dokud upstream nezapne strict) |
+| 6c | `assets/src/dom_utils.ts:55` | typová oprava kvůli `strict` tsconfigu | — | upstream zapne strict |
 | 6d | `assets/src/live_controller.ts:116-124` (`connect()`) | stale `ValueStore` po reconnectu | [#3424](https://github.com/symfony/ux/issues/3424), [PR #3537](https://github.com/symfony/ux/pull/3537) (jiný autor) | #3537 se mergne |
-| 7 | `assets/src/Component/index.ts:406-408, 477-482, 706-713` | LiveUrl nepřepíše URL po navigaci (klíč z Navigation API + `isConnected`) | [PR #3928](https://github.com/symfony/ux/pull/3928) | #3928 se mergne |
+| 7 | `assets/src/Component/index.ts:412-414, 479-484, 708-715` | LiveUrl nepřepíše URL po navigaci (klíč z Navigation API + `isConnected`) | [PR #3928](https://github.com/symfony/ux/pull/3928) | #3928 se mergne |
 | 8 | `.github/workflows/sync-upstream.yml` | denní sync z upstreamu | — | nikdy |
 | 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty) | standalone build a testy | — | nikdy |
 | 10 | `assets/test/unit/controller/live-url-navigation.test.ts`, `assets/test/unit/Component/request-started.test.ts` | testy custom změn 2 a 7 | — | s příslušnou změnou |
 
 ### Naše upstream PR (symfony/ux)
 
-Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-10-01.
+Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-10-02.
 
 | PR | Větev | Balíček | Co | Issue | Stav | Ve forku |
 |---|---|---|---|---|---|---|
-| [#3922](https://github.com/symfony/ux/pull/3922) | `types-render-started` | LiveComponent | `render:started` v typu `ComponentHooks` | — | schváleno | #4, 6c |
+| [#3922](https://github.com/symfony/ux/pull/3922) | `types-render-started` | LiveComponent | `render:started` v typu `ComponentHooks` | — | **mergnuto** | odstraněno (3.5.3) |
 | [#3923](https://github.com/symfony/ux/pull/3923) | `fix-queued-request-after-error` | LiveComponent | odeslání requestu z fronty po chybě | — | otázka zodpovězena | ne |
-| [#3924](https://github.com/symfony/ux/pull/3924) | `fix-preserve-skip-morph` | LiveComponent | potomci uvnitř `data-skip-morph` | Fix [#3423](https://github.com/symfony/ux/issues/3423) | schváleno | #6b |
+| [#3924](https://github.com/symfony/ux/pull/3924) | `fix-preserve-skip-morph` | LiveComponent | potomci uvnitř `data-skip-morph` | Fix [#3423](https://github.com/symfony/ux/issues/3423) | **mergnuto** | odstraněno (3.5.3) |
 | [#3925](https://github.com/symfony/ux/pull/3925) | `fix-network-error-loading-state` | LiveComponent | vzpamatování po výpadku sítě | Fix [#1986](https://github.com/symfony/ux/issues/1986), souvisí [#3535](https://github.com/symfony/ux/pull/3535) | čeká | ne |
-| [#3926](https://github.com/symfony/ux/pull/3926) | `fix-loading-state-after-error` | LiveComponent | konec loading stavu po chybě | ([#1463](https://github.com/symfony/ux/issues/1463) zavřená) | schváleno | #3 (`resetLoadingState`) |
+| [#3926](https://github.com/symfony/ux/pull/3926) | `fix-loading-state-after-error` | LiveComponent | konec loading stavu po chybě | ([#1463](https://github.com/symfony/ux/issues/1463) zavřená) | **mergnuto** | #3 (`resetLoadingState` už jen no-op) |
 | [#3927](https://github.com/symfony/ux/pull/3927) | `fix-morph-form-id-shadowing` | LiveComponent | `getAttribute('id')` místo `.id` (formulář s polem `id`) | — | schváleno | ne |
 | [#3928](https://github.com/symfony/ux/pull/3928) | `fix-live-url-navigation` | LiveComponent | LiveUrl nepřepíše URL po navigaci | — | schváleno | #7 |
 | [#3929](https://github.com/symfony/ux/pull/3929) | `feat-request-should-send` | LiveComponent | `controls.shouldSend` v `request:started` | — | čeká | #2 |
@@ -110,28 +108,11 @@ component.on('request:started', (requestConfig, controls) => {
 });
 ```
 
-### 3. `response:error` hook — `controls.resetLoadingState`
+### 3. `response:error` hook — `controls.resetLoadingState` (deprecated, no-op)
 
 **Soubor:** `assets/src/Component/index.ts`, metoda `performRequest()`
 
-Hook `response:error` má v `controls` nový flag `resetLoadingState` (default `false`). Při chybovém response zůstávaly loading indikátory (spinnery, disabled buttony) aktivní, protože se nevolal `loading.state:finished`. Nastavením `resetLoadingState = true` se loading stav vyčistí.
-
-```typescript
-component.on('response:error', (backendResponse, controls) => {
-    controls.displayError = false;
-    controls.resetLoadingState = true;
-});
-```
-
-### 4. `render:started` hook — přidán do `ComponentHooks` typu
-
-**Soubor:** `assets/src/Component/index.ts`
-
-Hook `render:started` se v upstreamu používal, ale nebyl v typu `ComponentHooks`. Nyní je typovaný:
-
-```typescript
-'render:started': (html: string, backendResponse: BackendResponse, controls: { shouldRender: boolean }) => MaybePromise;
-```
+Upstream od [PR #3926](https://github.com/symfony/ux/pull/3926) (mergnuto, ve forku od 3.5.3-pechynho) ukončí loading stav po chybovém response vždy. Flag `resetLoadingState` v `controls` zůstává jen kvůli kompatibilitě typů v aplikacích, které ho nastavují — nic nedělá. Odstranit, až ho aplikace přestanou používat.
 
 ### 5. Exportované hook typy
 
@@ -166,12 +147,6 @@ Upstream issue: [symfony/ux#3423](https://github.com/symfony/ux/issues/3423) (op
 
 Upstream (od 3.5) obaluje celé tělo `executeMorphdom()` do `try/finally` (dočasné vracení serverových ID u externě změněných elementů) — custom kód je uvnitř toho bloku. Bug s `innerHTML` swapem upstream k 3.5.1 stále má.
 
-### 6b. `data-skip-morph` — potomci se nefingerprintují
-
-**Soubor:** `assets/src/Component/plugins/ChildComponentPlugin.ts`
-
-Child komponenty uvnitř elementu s `data-skip-morph` (relativně k rodičovské komponentě) se neposílají v `children` fingerprintech. Jejich obsah se stejně zahodí `innerHTML` swapem, takže server je musí vyrenderovat celé místo toho, aby vrátil prázdný `data-live-preserve` placeholder. (Case 1 v komentáři k [#3423](https://github.com/symfony/ux/issues/3423).)
-
 ### 6d. Stale `ValueStore` po reconnectu controlleru
 
 **Soubor:** `assets/src/live_controller.ts`, metoda `connect()`
@@ -182,7 +157,6 @@ Upstream issue: [symfony/ux#3424](https://github.com/symfony/ux/issues/3424) (op
 
 ### 6c. Drobné typové opravy (kvůli `strict` tsconfigu)
 
-- `assets/src/Component/plugins/PageUnloadingPlugin.ts` — callback `render:started` má 2. argument `BackendResponse` (upstream tam má chybně `Response`; projeví se až díky custom typování hooku v `ComponentHooks`)
 - `assets/src/dom_utils.ts` — cast `element.dataset.value as string`
 
 ### 7. Fix LiveUrl `history.replaceState` po navigaci (race)

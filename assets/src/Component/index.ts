@@ -28,11 +28,17 @@ export type ComponentHooks = {
         // [CUSTOM] shouldSend = upstream PR symfony/ux#3929; abortRequest kept for BC
         controls: { shouldSend: boolean; /** @deprecated set shouldSend to false */ abortRequest: boolean }
     ) => MaybePromise;
-    // [CUSTOM] render:started added to the type (upstream PR symfony/ux#3922)
-    'render:started': (html: string, backendResponse: BackendResponse, controls: { shouldRender: boolean }) => MaybePromise;
+    'render:started': (
+        html: string,
+        backendResponse: BackendResponse,
+        controls: { shouldRender: boolean }
+    ) => MaybePromise;
     'render:finished': (component: Component) => MaybePromise;
-    // [CUSTOM] resetLoadingState (upstream fixes it without an option: PR symfony/ux#3926)
-    'response:error': (backendResponse: BackendResponse, controls: { displayError: boolean; resetLoadingState: boolean }) => MaybePromise;
+    // [CUSTOM] resetLoadingState kept for BC: no-op, upstream always finishes the loading state (PR symfony/ux#3926)
+    'response:error': (
+        backendResponse: BackendResponse,
+        controls: { displayError: boolean; /** @deprecated no-op, the loading state is always finished */ resetLoadingState: boolean }
+    ) => MaybePromise;
     'loading.state:started': (element: HTMLElement, request: BackendRequest) => MaybePromise;
     'loading.state:finished': (element: HTMLElement) => MaybePromise;
     'model:set': (model: string, value: any, component: Component) => MaybePromise;
@@ -438,18 +444,14 @@ export default class Component {
                 !headers.get('X-Live-Redirect') &&
                 !headers.has('X-Live-Remove')
             ) {
-                // [CUSTOM] Added resetLoadingState control to allow clearing loading
-                // indicators on error (e.g. spinners, disabled buttons).
+                // [CUSTOM] resetLoadingState kept for BC (no-op)
                 const controls = { displayError: true, resetLoadingState: false };
                 this.valueStore.pushPendingPropsBackToDirty();
+                this.hooks.triggerHook('loading.state:finished', this.element);
                 this.hooks.triggerHook('response:error', backendResponse, controls);
 
                 if (controls.displayError) {
                     this.renderError(html);
-                }
-
-                if (controls.resetLoadingState) {
-                    this.hooks.triggerHook('loading.state:finished', this.element);
                 }
 
                 this.backendRequest = null;

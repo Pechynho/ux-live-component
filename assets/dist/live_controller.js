@@ -2442,12 +2442,10 @@ var Component = class {
       if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect") && !headers.has("X-Live-Remove")) {
         const controls = { displayError: true, resetLoadingState: false };
         this.valueStore.pushPendingPropsBackToDirty();
+        this.hooks.triggerHook("loading.state:finished", this.element);
         this.hooks.triggerHook("response:error", backendResponse, controls);
         if (controls.displayError) {
           this.renderError(html);
-        }
-        if (controls.resetLoadingState) {
-          this.hooks.triggerHook("loading.state:finished", this.element);
         }
         this.backendRequest = null;
         thisPromiseResolve(backendResponse);
@@ -2809,7 +2807,7 @@ var ChildComponentPlugin_default = class {
       if (!child.id) {
         throw new Error("missing id");
       }
-      if (this.isChildBehindSkipMorph(child)) {
+      if (this.isInsideSkipMorphElement(child)) {
         return;
       }
       fingerprints[child.id] = {
@@ -2818,19 +2816,6 @@ var ChildComponentPlugin_default = class {
       };
     });
     return fingerprints;
-  }
-  // [CUSTOM] Check if a child component is inside a data-skip-morph zone
-  // relative to this parent component. If so, innerHTML swap will destroy
-  // the child during morph, so we should not preserve it.
-  isChildBehindSkipMorph(child) {
-    let el = child.element;
-    while (el && el !== this.component.element) {
-      if (el.hasAttribute("data-skip-morph")) {
-        return true;
-      }
-      el = el.parentElement;
-    }
-    return false;
   }
   /**
    * Notifies parent of a model change if desired.
@@ -2853,6 +2838,10 @@ var ChildComponentPlugin_default = class {
   }
   getChildren() {
     return findChildren(this.component);
+  }
+  isInsideSkipMorphElement(child) {
+    const skipMorphElement = child.element.parentElement?.closest("[data-skip-morph]");
+    return !!skipMorphElement && skipMorphElement !== this.component.element && this.component.element.contains(skipMorphElement);
   }
 };
 
@@ -3065,11 +3054,14 @@ var parseLoadingAction = (action, isLoading) => {
 var PageUnloadingPlugin_default = class {
   isConnected = false;
   attachToComponent(component) {
-    component.on("render:started", (html, backendResponse, controls) => {
-      if (!this.isConnected) {
-        controls.shouldRender = false;
+    component.on(
+      "render:started",
+      (html, response, controls) => {
+        if (!this.isConnected) {
+          controls.shouldRender = false;
+        }
       }
-    });
+    );
     component.on("connect", () => {
       this.isConnected = true;
     });

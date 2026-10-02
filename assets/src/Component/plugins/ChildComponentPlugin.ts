@@ -43,10 +43,9 @@ export default class implements PluginInterface {
                 throw new Error('missing id');
             }
 
-            // [CUSTOM] Skip children behind data-skip-morph — they will be
-            // inside an innerHTML swap zone, so the server should fully
-            // re-render them instead of emitting data-live-preserve.
-            if (this.isChildBehindSkipMorph(child)) {
+            // the inner HTML of a data-skip-morph element is replaced, not morphed,
+            // so an empty preserved child would be lost: let the server render it fully
+            if (this.isInsideSkipMorphElement(child)) {
                 return;
             }
 
@@ -57,20 +56,6 @@ export default class implements PluginInterface {
         });
 
         return fingerprints;
-    }
-
-    // [CUSTOM] Check if a child component is inside a data-skip-morph zone
-    // relative to this parent component. If so, innerHTML swap will destroy
-    // the child during morph, so we should not preserve it.
-    private isChildBehindSkipMorph(child: Component): boolean {
-        let el: HTMLElement | null = child.element;
-        while (el && el !== this.component.element) {
-            if (el.hasAttribute('data-skip-morph')) {
-                return true;
-            }
-            el = el.parentElement;
-        }
-        return false;
     }
 
     /**
@@ -100,5 +85,15 @@ export default class implements PluginInterface {
 
     private getChildren(): Component[] {
         return findChildren(this.component);
+    }
+
+    private isInsideSkipMorphElement(child: Component): boolean {
+        const skipMorphElement = child.element.parentElement?.closest('[data-skip-morph]');
+
+        return (
+            !!skipMorphElement &&
+            skipMorphElement !== this.component.element &&
+            this.component.element.contains(skipMorphElement)
+        );
     }
 }
