@@ -298,16 +298,15 @@ declare class Component {
     private renderError;
     private resetPromise;
     /**
-     * [CUSTOM] Key of the current history entry (Navigation API), or null when
-     * the browser does not support it. The key survives history.replaceState(),
-     * and changes on a new entry and on back/forward.
-     */
-    private getCurrentHistoryEntryKey;
-    /**
      * Called on a child component after the parent component render has requested
      * that the child component update its props & re-render if necessary.
      */
     _updateFromParentProps(props: any): void;
+    /**
+     * Returns the key of the current history entry, or null when the browser does not support the Navigation API.
+     */
+    private getCurrentHistoryEntryKey;
+    private isOnSamePage;
 }
 
 declare const getComponent: (element: HTMLElement) => Promise<Component>;

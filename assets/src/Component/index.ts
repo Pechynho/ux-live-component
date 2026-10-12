@@ -409,10 +409,6 @@ export default class Component {
             return;
         }
 
-        // [CUSTOM] Remember the history entry, so a late response can detect
-        // that the user navigated away while the request was in flight.
-        const historyEntryKey = this.getCurrentHistoryEntryKey();
-
         this.backendRequest = this.backend.makeRequest(
             requestConfig.props,
             requestConfig.actions,
@@ -422,6 +418,8 @@ export default class Component {
             requestConfig.files
         );
         this.hooks.triggerHook('loading.state:started', this.element, this.backendRequest);
+        const historyEntryKey = this.getCurrentHistoryEntryKey();
+        const requestUrl = window.location.pathname + window.location.search;
 
         this.pendingActions = remainingActions;
         this.valueStore.flushDirtyPropsToPending();
@@ -475,13 +473,9 @@ export default class Component {
                 return response;
             }
 
+            // Skip the URL update if the user navigated away while the request was pending
             const liveUrl = backendResponse.getLiveUrl();
-            // [CUSTOM] A response arriving after a navigation must not rewrite the
-            // new history entry: apply the LiveUrl only if the component is still
-            // in the document and the history entry did not change since the
-            // request was sent. Only the history update is skipped, the response
-            // is still processed.
-            if (liveUrl && this.element.isConnected && this.getCurrentHistoryEntryKey() === historyEntryKey) {
+            if (liveUrl && this.element.isConnected && this.isOnSamePage(historyEntryKey, requestUrl)) {
                 history.replaceState(
                     history.state,
                     '',
@@ -706,15 +700,6 @@ export default class Component {
     }
 
     /**
-     * [CUSTOM] Key of the current history entry (Navigation API), or null when
-     * the browser does not support it. The key survives history.replaceState(),
-     * and changes on a new entry and on back/forward.
-     */
-    private getCurrentHistoryEntryKey(): string | null {
-        return (window as any).navigation?.currentEntry?.key ?? null;
-    }
-
-    /**
      * Called on a child component after the parent component render has requested
      * that the child component update its props & re-render if necessary.
      */
@@ -725,6 +710,22 @@ export default class Component {
         if (isChanged) {
             this.render();
         }
+    }
+
+    /**
+     * Returns the key of the current history entry, or null when the browser does not support the Navigation API.
+     */
+    private getCurrentHistoryEntryKey(): string | null {
+        return (window as any).navigation?.currentEntry?.key ?? null;
+    }
+
+    private isOnSamePage(historyEntryKey: string | null, requestUrl: string): boolean {
+        if (this.getCurrentHistoryEntryKey() === historyEntryKey) {
+            return true;
+        }
+
+        // A jump to an anchor creates a new history entry without leaving the page
+        return window.location.pathname + window.location.search === requestUrl;
     }
 }
 

@@ -5,6 +5,17 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.5.4-pechynho
+
+- Sync with upstream `3.x`, which now contains our PRs symfony/ux#3928
+  (LiveUrl does not rewrite the URL after a navigation), symfony/ux#3927
+  (`getAttribute('id')` instead of `.id`, forms with an `id` field) and
+  symfony/ux#4022 (deterministic id counters reset between requests). The
+  fork's own LiveUrl guard and its test were dropped in favour of upstream,
+  which additionally keeps the URL update after a jump to an anchor.
+- `data-live-preserve` restore: use the `id` attribute (not the `.id`
+  property) when marking a preserved element as handled.
+
 ## 3.5.3-pechynho
 
 - Sync with upstream `3.x`, which now contains our PRs symfony/ux#3922

@@ -1428,7 +1428,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
       return clonedOldElement;
     };
     rootToElement.querySelectorAll("[data-live-preserve]").forEach((newElement) => {
-      const id = newElement.id;
+      const id = newElement.getAttribute("id");
       if (!id) {
         throw new Error("The data-live-preserve attribute requires an id attribute to be set on the element");
       }
@@ -1449,12 +1449,13 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
           if (fromEl === rootFromElement) {
             return true;
           }
-          if (fromEl.id && originalElementsToPreserve.has(fromEl.id)) {
-            if (fromEl.id === toEl.id) {
-              handledPreserveIds.add(fromEl.id);
+          const fromId = fromEl.getAttribute("id");
+          if (fromId && originalElementsToPreserve.has(fromId)) {
+            if (fromId === toEl.getAttribute("id")) {
+              handledPreserveIds.add(fromId);
               return false;
             }
-            const clonedFromEl = markElementAsNeedingPostMorphSwap(fromEl.id, true);
+            const clonedFromEl = markElementAsNeedingPostMorphSwap(fromId, true);
             if (!clonedFromEl) {
               throw new Error("missing clone");
             }
@@ -1507,7 +1508,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
               }
             }
           }
-          if (fromEl.hasAttribute("data-skip-morph") || fromEl.id && fromEl.id !== toEl.id) {
+          if (fromEl.hasAttribute("data-skip-morph") || fromId && fromId !== toEl.getAttribute("id")) {
             fromEl.innerHTML = toEl.innerHTML;
             originalElementsToPreserve.forEach((originalElement, id) => {
               if (handledPreserveIds.has(id)) {
@@ -1532,8 +1533,9 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
           if (!(node instanceof HTMLElement)) {
             return true;
           }
-          if (node.id && originalElementsToPreserve.has(node.id)) {
-            markElementAsNeedingPostMorphSwap(node.id, false);
+          const id = node.getAttribute("id");
+          if (id && originalElementsToPreserve.has(id)) {
+            markElementAsNeedingPostMorphSwap(id, false);
             return true;
           }
           if (externalMutationTracker.wasElementAdded(node)) {
@@ -2419,7 +2421,6 @@ var Component = class {
       this.nextRequestPromise.then(thisPromiseResolve);
       return;
     }
-    const historyEntryKey = this.getCurrentHistoryEntryKey();
     this.backendRequest = this.backend.makeRequest(
       requestConfig.props,
       requestConfig.actions,
@@ -2429,6 +2430,8 @@ var Component = class {
       requestConfig.files
     );
     this.hooks.triggerHook("loading.state:started", this.element, this.backendRequest);
+    const historyEntryKey = this.getCurrentHistoryEntryKey();
+    const requestUrl = window.location.pathname + window.location.search;
     this.pendingActions = remainingActions;
     this.valueStore.flushDirtyPropsToPending();
     this.isRequestPending = remainingActions.length > 0;
@@ -2460,7 +2463,7 @@ var Component = class {
         return response;
       }
       const liveUrl = backendResponse.getLiveUrl();
-      if (liveUrl && this.element.isConnected && this.getCurrentHistoryEntryKey() === historyEntryKey) {
+      if (liveUrl && this.element.isConnected && this.isOnSamePage(historyEntryKey, requestUrl)) {
         history.replaceState(
           history.state,
           "",
@@ -2630,14 +2633,6 @@ var Component = class {
     });
   }
   /**
-   * [CUSTOM] Key of the current history entry (Navigation API), or null when
-   * the browser does not support it. The key survives history.replaceState(),
-   * and changes on a new entry and on back/forward.
-   */
-  getCurrentHistoryEntryKey() {
-    return window.navigation?.currentEntry?.key ?? null;
-  }
-  /**
    * Called on a child component after the parent component render has requested
    * that the child component update its props & re-render if necessary.
    */
@@ -2646,6 +2641,18 @@ var Component = class {
     if (isChanged) {
       this.render();
     }
+  }
+  /**
+   * Returns the key of the current history entry, or null when the browser does not support the Navigation API.
+   */
+  getCurrentHistoryEntryKey() {
+    return window.navigation?.currentEntry?.key ?? null;
+  }
+  isOnSamePage(historyEntryKey, requestUrl) {
+    if (this.getCurrentHistoryEntryKey() === historyEntryKey) {
+      return true;
+    }
+    return window.location.pathname + window.location.search === requestUrl;
   }
 };
 function proxifyComponent(component) {
@@ -3434,7 +3441,7 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
     return emits;
   }
   createComponent() {
-    const id = this.element.id || null;
+    const id = this.element.getAttribute("id") || null;
     this.component = new Component(
       this.element,
       this.nameValue,
