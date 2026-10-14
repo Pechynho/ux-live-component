@@ -23,7 +23,7 @@ import {
 import getElementAsTagText from './Util/getElementAsTagText';
 
 export { Component };
-// [CUSTOM] exported hook types (upstream PR symfony/ux#3930 exports ComponentHooks)
+// [CUSTOM] exported hook types (upstream exports only ComponentHooks since symfony/ux#3930)
 export type {
     ComponentHooks,
     ComponentHookName,

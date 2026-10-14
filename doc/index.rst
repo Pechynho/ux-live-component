@@ -987,6 +987,22 @@ The following hooks are available (along with the arguments that are passed):
 * ``loading.state:finished`` args ``(element: HTMLElement)``
 * ``model:set`` args ``(model: string, value: any, component: Component)``
 
+.. versionadded:: 3.6
+
+    The ``ComponentHooks`` type was exported in LiveComponent 3.6.
+
+In TypeScript, use the ``ComponentHooks`` type to type a hook callback that is defined outside of the ``on()`` call:
+
+.. code-block:: typescript
+
+    import type { ComponentHooks } from '@symfony/ux-live-component';
+
+    const onError: ComponentHooks['response:error'] = (backendResponse, controls) => {
+        controls.displayError = false;
+    };
+
+    this.component.on('response:error', onError);
+
 Loading States
 --------------
 
@@ -1203,6 +1219,17 @@ You can also use the ``live_action`` twig helper function to render the attribut
     {# with modifiers #}
 
     <button {{ live_action('save', {}, {'debounce': 300}) }}>Save</button>
+
+To pass the attributes to a Twig component, spread them into its tag:
+
+.. code-block:: html+twig
+
+    <twig:Button {{ ...live_action('save') }}>Save</twig:Button>
+
+.. versionadded:: 3.6
+
+    Spreading ``live_action()`` into a Twig component tag was added in
+    LiveComponent 3.6.
 
 
 Actions & Services

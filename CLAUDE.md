@@ -25,7 +25,7 @@ Všechny custom úpravy jsou označené komentářem `[CUSTOM]` v kódu. **Každ
 
 ### Inventář odchylek od upstreamu
 
-Řádky platí k verzi `3.5.4-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
+Řádky platí k verzi `3.6.0-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
 
 ```bash
 grep -rn "\[CUSTOM\]" assets/src assets/test          # všechny označené úpravy
@@ -38,17 +38,17 @@ git diff -U0 upstream/3.x -- assets/src                # přesné hunky
 | 1 | `assets/src/Component/index.ts:247-267` | `Component.request()` (raw `Response`, bez re-renderu) | — (upstream alternativa: [PR #3931](https://github.com/symfony/ux/pull/3931) `LiveResponse::data()`, [#2967](https://github.com/symfony/ux/pull/2967)) | #3931 se mergne a aplikace přejdou na `LiveResponse::data()` |
 | 2 | `assets/src/Component/index.ts:26-30` (typ), `:400-410` (`performRequest()`) | `request:started` → `controls.shouldSend` / `abortRequest` (BC) | [PR #3929](https://github.com/symfony/ux/pull/3929) (`shouldSend`) | #3929 se mergne a aplikace přejdou z `abortRequest` na `shouldSend = false` |
 | 3 | `assets/src/Component/index.ts:37-41` (typ), `:445-446` (`performRequest()`) | `response:error` → `controls.resetLoadingState` jako deprecated no-op (BC) | [PR #3926](https://github.com/symfony/ux/pull/3926) — mergnuto (3.5.3-pechynho), loading stav se ukončí vždy | aplikace přestanou nastavovat `resetLoadingState` |
-| 5 | `assets/src/Component/index.ts:53-65`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) (exportuje jen `ComponentHooks`) | aliasy si můžeme nechat; po #3930 jsou jen zkratky |
+| 5 | `assets/src/Component/index.ts:53-65`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) — mergnuto (3.6.0), upstream exportuje jen `ComponentHooks` | aliasy si můžeme nechat; jsou jen zkratky |
 | 6 | `assets/src/morphdom.ts:71-77, 94, 112, 139, 258-274, 317, 326-330`, `assets/src/live_controller.ts:98-102` | obnova `data-live-preserve` po `innerHTML` swapu + event `live:preserve-restored` + re-render; `CSS.escape` | [#3423](https://github.com/symfony/ux/issues/3423) — případ se změnou `id` rodiče upstream vyřešil upgradem na Idiomorph 0.7.4 ([PR #3868](https://github.com/symfony/ux/pull/3868)) | nejspíš už teď zbytečné (ověřit a odstranit) |
 | 6c | `assets/src/dom_utils.ts:55` | typová oprava kvůli `strict` tsconfigu | — | upstream zapne strict |
 | 6d | `assets/src/live_controller.ts:116-124` (`connect()`) | stale `ValueStore` po reconnectu | [#3424](https://github.com/symfony/ux/issues/3424), [PR #3537](https://github.com/symfony/ux/pull/3537) (jiný autor) | #3537 se mergne |
 | 8 | `.github/workflows/sync-upstream.yml` | denní sync z upstreamu | — | nikdy |
-| 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty) | standalone build a testy | — | nikdy |
+| 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty, devDeps `tsup` a `vite`) | standalone build a testy | — | nikdy |
 | 10 | `assets/test/unit/Component/request-started.test.ts` | testy custom změny 2 | — | s příslušnou změnou |
 
 ### Naše upstream PR (symfony/ux)
 
-Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-10-12.
+Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá větev má worktree v `.claude/worktrees/`. Stav k 2026-10-14.
 
 | PR | Větev | Balíček | Co | Issue | Stav | Ve forku |
 |---|---|---|---|---|---|---|
@@ -60,7 +60,7 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | [#3927](https://github.com/symfony/ux/pull/3927) | `fix-morph-form-id-shadowing` | LiveComponent | `getAttribute('id')` místo `.id` (formulář s polem `id`) | — | **mergnuto** | přes upstream sync (3.5.4) |
 | [#3928](https://github.com/symfony/ux/pull/3928) | `fix-live-url-navigation` | LiveComponent | LiveUrl nepřepíše URL po navigaci | — | **mergnuto** | odstraněno (3.5.4) |
 | [#3929](https://github.com/symfony/ux/pull/3929) | `feat-request-should-send` | LiveComponent | `controls.shouldSend` v `request:started` | — | čeká | #2 |
-| [#3930](https://github.com/symfony/ux/pull/3930) | `feat-hook-types` | LiveComponent | export typu `ComponentHooks` | — | čeká | #5 |
+| [#3930](https://github.com/symfony/ux/pull/3930) | `feat-hook-types` | LiveComponent | export typu `ComponentHooks` | — | **mergnuto** | #5 (zůstávají jen aliasy) |
 | [#3931](https://github.com/symfony/ux/pull/3931) | `feat-live-response-data` | LiveComponent | `LiveResponse::data()` (data z akce do JS) | souvisí [#2967](https://github.com/symfony/ux/pull/2967) | čeká | #1 (`request()`) |
 | [#4021](https://github.com/symfony/ux/pull/4021) | `fix-component-stack-unbalanced` | TwigComponent | komponenta nezůstane na `ComponentStack` po chybě v pre-renderu + `kernel.reset` | Fix [#3894](https://github.com/symfony/ux/issues/3894) | čeká | ne (jiný balíček) |
 | [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | **mergnuto** | přes upstream sync (3.5.4) |

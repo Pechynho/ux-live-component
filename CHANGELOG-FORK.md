@@ -5,6 +5,15 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.6.0-pechynho
+
+- Sync with upstream `3.6.0`, which now contains our PR symfony/ux#3930
+  (`ComponentHooks` exported from the package entry point). The fork keeps
+  its per-hook aliases (`RequestStartedHook`, …) on top of it.
+- Tooling follows upstream (TypeScript 6, Vitest 5); `vite` added as a dev
+  dependency (Vitest 5 peer, provided by the monorepo root upstream) and the
+  tsup dts build silences the TypeScript 6 `baseUrl` deprecation.
+
 ## 3.5.4-pechynho
 
 - Sync with upstream `3.x`, which now contains our PRs symfony/ux#3928
