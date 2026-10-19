@@ -53,7 +53,7 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | PR | Větev | Balíček | Co | Issue | Stav | Ve forku |
 |---|---|---|---|---|---|---|
 | [#3922](https://github.com/symfony/ux/pull/3922) | `types-render-started` | LiveComponent | `render:started` v typu `ComponentHooks` | — | **mergnuto** | odstraněno (3.5.3) |
-| [#3923](https://github.com/symfony/ux/pull/3923) | `fix-queued-request-after-error` | LiveComponent | odeslání requestu z fronty po chybě | — | **schváleno** @smnandre (2026-10-18), čeká na merge | ne |
+| [#3923](https://github.com/symfony/ux/pull/3923) | `fix-queued-request-after-error` | LiveComponent | odeslání requestu z fronty po chybě | — | **mergnuto** (2026-10-19) | přes upstream sync (3.6.1) |
 | [#3924](https://github.com/symfony/ux/pull/3924) | `fix-preserve-skip-morph` | LiveComponent | potomci uvnitř `data-skip-morph` | Fix [#3423](https://github.com/symfony/ux/issues/3423) | **mergnuto** | odstraněno (3.5.3) |
 | [#3925](https://github.com/symfony/ux/pull/3925) | `fix-network-error-loading-state` | LiveComponent | vzpamatování po výpadku sítě | Fix [#1986](https://github.com/symfony/ux/issues/1986), souvisí [#3535](https://github.com/symfony/ux/pull/3535) | čeká | ne |
 | [#3926](https://github.com/symfony/ux/pull/3926) | `fix-loading-state-after-error` | LiveComponent | konec loading stavu po chybě | ([#1463](https://github.com/symfony/ux/issues/1463) zavřená) | **mergnuto** | #3 (`resetLoadingState` už jen no-op) |
@@ -64,7 +64,7 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | [#3931](https://github.com/symfony/ux/pull/3931) | `feat-live-response-data` | LiveComponent | `LiveResponse::data()` (data z akce do JS) | souvisí [#2967](https://github.com/symfony/ux/pull/2967) | čeká | #1 (`request()`) |
 | [#4021](https://github.com/symfony/ux/pull/4021) | `fix-component-stack-unbalanced` | TwigComponent | komponenta nezůstane na `ComponentStack` po chybě v pre-renderu + `kernel.reset` (přes `ComponentRenderer::reset()`, podle review @smnandre 2026-10-18) | Fix [#3894](https://github.com/symfony/ux/issues/3894) | **mergnuto** @Kocal (2026-10-18); výjimka v těle embedded komponenty (`try/finally` v `ComponentNode`) → případné samostatné PR | ne (jiný balíček) |
 | [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | **mergnuto** | přes upstream sync (3.5.4) |
-| [#4024](https://github.com/symfony/ux/pull/4024) | `fix-preserve-placeholder-explicit-id` | LiveComponent | placeholder potomka s explicitním `id` a změněnými props dostane `id` (chyba „data-live-preserve attribute requires an id“) | souvisí [#1643](https://github.com/symfony/ux/issues/1643) (zavřená bez opravy) | **schváleno** @smnandre (2026-10-18), čeká na merge | ne |
+| [#4024](https://github.com/symfony/ux/pull/4024) | `fix-preserve-placeholder-explicit-id` | LiveComponent | placeholder potomka s explicitním `id` a změněnými props dostane `id` (chyba „data-live-preserve attribute requires an id“) | souvisí [#1643](https://github.com/symfony/ux/issues/1643) (zavřená bez opravy) | **mergnuto** (2026-10-19) | přes upstream sync (3.6.1) |
 
 **Naše RFC issue (návrhy před PR):**
 

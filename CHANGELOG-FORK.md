@@ -5,6 +5,12 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.6.1-pechynho
+
+- Sync with upstream `3.x`, which now contains our PRs symfony/ux#3923
+  (the queued request is sent after an error response) and symfony/ux#4024
+  (a child component with an explicit `id` keeps it when its props change).
+
 ## 3.6.0-pechynho
 
 - Sync with upstream `3.6.0`, which now contains our PR symfony/ux#3930

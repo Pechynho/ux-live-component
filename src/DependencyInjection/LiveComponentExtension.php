@@ -39,7 +39,6 @@ use Symfony\UX\LiveComponent\EventListener\InterceptChildComponentRenderSubscrib
 use Symfony\UX\LiveComponent\EventListener\LiveComponentSubscriber;
 use Symfony\UX\LiveComponent\EventListener\LiveUrlSubscriber;
 use Symfony\UX\LiveComponent\EventListener\RequestInitializeSubscriber;
-use Symfony\UX\LiveComponent\EventListener\ResetDeterministicIdSubscriber;
 use Symfony\UX\LiveComponent\Form\Type\LiveCollectionType;
 use Symfony\UX\LiveComponent\Hydration\HydrationExtensionInterface;
 use Symfony\UX\LiveComponent\LiveComponentBundle;
@@ -161,6 +160,7 @@ final class LiveComponentExtension extends Extension implements PrependExtension
             ->setArguments([
                 new Reference('ux.twig_component.live_component_stack'),
             ])
+            ->addTag('container.service_subscriber', ['key' => ComponentFactory::class, 'id' => 'ux.twig_component.component_factory'])
             ->addTag('container.service_subscriber', ['key' => DeterministicTwigIdCalculator::class, 'id' => 'ux.live_component.deterministic_id_calculator'])
             ->addTag('container.service_subscriber', ['key' => ChildComponentPartialRenderer::class, 'id' => 'ux.live_component.child_component_partial_renderer'])
             ->addTag('kernel.event_subscriber');
@@ -176,13 +176,6 @@ final class LiveComponentExtension extends Extension implements PrependExtension
             ->addTag('container.service_subscriber', ['key' => LiveComponentHydrator::class, 'id' => 'ux.live_component.component_hydrator'])
             ->addTag('container.service_subscriber', ['key' => LiveControllerAttributesCreator::class, 'id' => 'ux.live_component.live_controller_attributes_creator'])
         ;
-
-        $container->register('ux.live_component.reset_deterministic_id_subscriber', ResetDeterministicIdSubscriber::class)
-            ->setArguments([
-                new Reference('ux.live_component.deterministic_id_calculator'),
-                new Reference('ux.twig_component.component_stack'),
-            ])
-            ->addTag('kernel.event_subscriber');
 
         $container->register('ux.live_component.twig.component_extension', LiveComponentTwigExtension::class)
             ->addTag('twig.extension')
@@ -257,6 +250,9 @@ final class LiveComponentExtension extends Extension implements PrependExtension
         ;
 
         $container->register('ux.live_component.deterministic_id_calculator', DeterministicTwigIdCalculator::class)
+            ->setArguments([
+                new Reference('ux.twig_component.component_stack'),
+            ])
             ->addTag('kernel.reset', ['method' => 'reset'])
         ;
         $container->register('ux.live_component.fingerprint_calculator', FingerprintCalculator::class)

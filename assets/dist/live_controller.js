@@ -2452,6 +2452,10 @@ var Component = class {
         }
         this.backendRequest = null;
         thisPromiseResolve(backendResponse);
+        if (this.isRequestPending) {
+          this.isRequestPending = false;
+          this.performRequest();
+        }
         return response;
       }
       if (backendResponse.isRemoved()) {
@@ -3224,6 +3228,34 @@ var SetValueOntoModelFieldsPlugin_default = class {
       if (element instanceof HTMLSelectElement && !element.multiple) {
         component.valueStore.set(modelName, getValueFromElement(element, component.valueStore));
       }
+    });
+    this.synchronizeValueOfSelectsMappedViaForm(component);
+  }
+  /**
+   * Reads back the value of single selects bound by their "name" inside a
+   * <form data-model>: after a re-render, the selected option may be gone
+   * (or another one selected automatically), and the browser does not
+   * dispatch a "change" event for that.
+   *
+   * https://github.com/symfony/ux/issues/3529
+   */
+  synchronizeValueOfSelectsMappedViaForm(component) {
+    component.element.querySelectorAll("form[data-model] select[name]:not([data-model])").forEach((element) => {
+      if (!(element instanceof HTMLSelectElement) || element.multiple) {
+        return;
+      }
+      if (!elementBelongsToThisComponent(element, component)) {
+        return;
+      }
+      const modelDirective = getModelDirectiveFromElement(element, false);
+      if (!modelDirective) {
+        return;
+      }
+      const modelName = modelDirective.action;
+      if (component.getUnsyncedModels().includes(modelName) || !component.valueStore.has(modelName)) {
+        return;
+      }
+      component.valueStore.set(modelName, getValueFromElement(element, component.valueStore));
     });
   }
 };
