@@ -25,7 +25,7 @@ Všechny custom úpravy jsou označené komentářem `[CUSTOM]` v kódu. **Každ
 
 ### Inventář odchylek od upstreamu
 
-Řádky platí k verzi `3.6.0-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
+Řádky platí k verzi `3.7.0-pechynho`; po upstream syncu se můžou posunout. Autoritativní seznam vždy dá:
 
 ```bash
 grep -rn "\[CUSTOM\]" assets/src assets/test          # všechny označené úpravy
@@ -41,7 +41,6 @@ git diff -U0 upstream/3.x -- assets/src                # přesné hunky
 | 5 | `assets/src/Component/index.ts:53-65`, `assets/src/live_controller.ts:26-40` | exportované typy hooků (`RequestStartedHook` …) | [PR #3930](https://github.com/symfony/ux/pull/3930) — mergnuto (3.6.0), upstream exportuje jen `ComponentHooks` | aliasy si můžeme nechat; jsou jen zkratky |
 | 6 | `assets/src/morphdom.ts:71-77, 94, 112, 139, 258-274, 317, 326-330`, `assets/src/live_controller.ts:98-102` | obnova `data-live-preserve` po `innerHTML` swapu + event `live:preserve-restored` + re-render; `CSS.escape` | [#3423](https://github.com/symfony/ux/issues/3423) — případ se změnou `id` rodiče upstream vyřešil upgradem na Idiomorph 0.7.4 ([PR #3868](https://github.com/symfony/ux/pull/3868)) | nejspíš už teď zbytečné (ověřit a odstranit) |
 | 6c | `assets/src/dom_utils.ts:55` | typová oprava kvůli `strict` tsconfigu | — | upstream zapne strict |
-| 6d | `assets/src/live_controller.ts:116-124` (`connect()`) | stale `ValueStore` po reconnectu | [#3424](https://github.com/symfony/ux/issues/3424), [PR #3537](https://github.com/symfony/ux/pull/3537) (jiný autor) | #3537 se mergne |
 | 8 | `.github/workflows/sync-upstream.yml` | denní sync z upstreamu | — | nikdy |
 | 9 | `assets/tsup.config.mjs`, `assets/tsconfig.json`, `assets/vitest.config.mjs`, `assets/test/setup.js`, `Makefile`, `assets/package.json` (verze, build skripty, devDeps `tsup` a `vite`) | standalone build a testy | — | nikdy |
 | 10 | `assets/test/unit/Component/request-started.test.ts` | testy custom změny 2 | — | s příslušnou změnou |
@@ -72,7 +71,7 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 |---|---|---|
 | [#4025](https://github.com/symfony/ux/issues/4025) | `LiveResponse::skipRender()` + `LiveResponse::data(...)->withoutRender()`: akce aktualizuje props (a emity, LiveUrl) bez renderu šablony a bez morphu. Hlavička `X-Live-Skip-Render: 1`, tělo = prázdný kořenový element s live atributy. Otevřené otázky: `render:started`/`render:finished`, batch (přeskočit jen když všechny akce chtějí), kombinace s `data()`, název | čeká na maintainery, PR až po dohodě |
 
-Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní. Související cizí PR: [#3537](https://github.com/symfony/ux/pull/3537) (stale `ValueStore`, odchylka 6d).
+Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní.
 
 ### 1. `Component.request()` — standalone request bez re-renderu
 
@@ -146,13 +145,9 @@ Upstream issue: [symfony/ux#3423](https://github.com/symfony/ux/issues/3423) (op
 
 Upstream (od 3.5) obaluje celé tělo `executeMorphdom()` do `try/finally` (dočasné vracení serverových ID u externě změněných elementů) — custom kód je uvnitř toho bloku. Bug s `innerHTML` swapem upstream k 3.5.1 stále má.
 
-### 6d. Stale `ValueStore` po reconnectu controlleru
+### 6d. ~~Stale `ValueStore` po reconnectu controlleru~~ — odstraněno (3.7.0)
 
-**Soubor:** `assets/src/live_controller.ts`, metoda `connect()`
-
-Stimulus při disconnect → connect na stejném elementu nevolá znovu `initialize()`, takže přežije starý `Component` i jeho `ValueStore` se zastaralými props → chyby `Invalid model name`. `connect()` teď porovná aktuální `propsValue` s původními props ve `ValueStore` a při rozdílu zavolá `createComponent()`.
-
-Upstream issue: [symfony/ux#3424](https://github.com/symfony/ux/issues/3424) (open), upstream PR [#3537](https://github.com/symfony/ux/pull/3537) (open, jiný autor). Až se PR mergne, custom kód odstranit.
+Upstream PR [#3537](https://github.com/symfony/ux/pull/3537) (jiný autor) mergnut, fork používá upstream verzi `connect()` v `live_controller.ts`.
 
 ### 6c. Drobné typové opravy (kvůli `strict` tsconfigu)
 

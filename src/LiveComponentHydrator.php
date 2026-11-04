@@ -338,6 +338,10 @@ final class LiveComponentHydrator
             foreach ($collectionValueType->traverse() as $t) {
                 if ($t instanceof ObjectType) {
                     foreach ($value as $key => $objectItem) {
+                        if (null === $objectItem) {
+                            continue;
+                        }
+
                         $value[$key] = $this->hydrateObjectValue($objectItem, $t->getClassName(), true, $propMetadata->getFormat(), $parentObject::class, \sprintf('%s.%s', $propMetadata->getName(), $key), $parentObject);
                     }
 
@@ -546,6 +550,12 @@ final class LiveComponentHydrator
             foreach ($collectionValueType ? $collectionValueType->traverse() : [] as $t) {
                 if ($t instanceof ObjectType) {
                     foreach ($value as $key => $objectItem) {
+                        // a null item is kept as-is: LiveCollectionTrait adds new
+                        // items as null until their form entry is filled in
+                        if (null === $objectItem) {
+                            continue;
+                        }
+
                         if (!$t->accepts($objectItem)) {
                             throw new \LogicException(\sprintf('The LiveProp "%s" on component "%s" is an array. We determined the array is full of "%s" objects, but at least one key had a different value of "%s".', $propMetadata->getName(), $parentObject::class, $t->getClassName(), get_debug_type($objectItem)));
                         }
@@ -638,7 +648,14 @@ final class LiveComponentHydrator
 
             $effectiveDateFormat = $dateFormat ?: \DateTimeInterface::RFC3339;
 
-            return $className::createFromFormat($effectiveDateFormat, $value) ?: throw new BadRequestHttpException(\sprintf('The model path "%s" was sent invalid date data "%s" or in an invalid format. Make sure it\'s a valid date and it matches the expected format "%s".', $propertyPathForError, $value, $effectiveDateFormat));
+            $date = $className::createFromFormat($effectiveDateFormat, $value);
+            $errors = $className::getLastErrors();
+
+            if (false === $date || (false !== $errors && $errors['warning_count'] > 0)) {
+                throw new BadRequestHttpException(\sprintf('The model path "%s" was sent invalid date data "%s" or in an invalid format. Make sure it\'s a valid date and it matches the expected format "%s".', $propertyPathForError, $value, $effectiveDateFormat));
+            }
+
+            return $date;
         }
 
         if (is_a($className, AbstractUid::class, true)) {

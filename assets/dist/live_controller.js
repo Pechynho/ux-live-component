@@ -2617,9 +2617,7 @@ var Component = class {
       iframe.contentWindow.document.close();
     }
     const closeModal = (modal2) => {
-      if (modal2) {
-        modal2.outerHTML = "";
-      }
+      modal2?.remove();
       document.body.style.overflow = "visible";
     };
     modal.addEventListener("click", () => closeModal(modal));
@@ -3315,9 +3313,7 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
     this.createComponent();
   }
   connect() {
-    const currentProps = this.propsValue;
-    const storedProps = this.component.valueStore.getOriginalProps();
-    if (JSON.stringify(currentProps) !== JSON.stringify(storedProps)) {
+    if (JSON.stringify(this.propsValue) !== JSON.stringify(this.component.valueStore.getOriginalProps())) {
       this.createComponent();
     }
     this.connectComponent();

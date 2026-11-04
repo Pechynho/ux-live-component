@@ -5,6 +5,12 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.7.0-pechynho
+
+- Sync with upstream `3.7.0`, which now contains symfony/ux#3537 (the
+  `Component` is rebuilt when the controller reconnects with different props).
+  The fork's own `connect()` fix was dropped in favour of upstream.
+
 ## 3.6.1-pechynho
 
 - Sync with upstream `3.x`, which now contains our PRs symfony/ux#3923
