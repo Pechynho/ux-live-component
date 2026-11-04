@@ -13,7 +13,9 @@ namespace Symfony\UX\LiveComponent\Hydration;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\Persistence\Mapping\MappingException;
 use Doctrine\Persistence\ObjectManager;
+use Symfony\Component\Uid\AbstractUid;
 
 /**
  * Handles hydration of Doctrine entities.
@@ -47,7 +49,9 @@ class DoctrineEntityHydrationExtension implements HydrationExtensionInterface
         // an empty array means a non-persisted entity
         // we support instantiating with no constructor args
         if (\is_array($value) && 0 === \count($value)) {
-            return new $className();
+            $class = $this->objectManagerFor($className)->getClassMetadata($className)->getName();
+
+            return new $class();
         }
 
         // e.g. an empty string
@@ -71,8 +75,12 @@ class DoctrineEntityHydrationExtension implements HydrationExtensionInterface
             ->getIdentifierValues($object)
         ;
 
-        // Dehydrate ID values in case they are other entities
-        $id = array_map(fn ($id) => \is_object($id) && $this->supports($id::class) ? $this->dehydrate($id) : $id, $id);
+        // Dehydrate ID values in case they are other entities or UIDs
+        $id = array_map(fn ($id) => match (true) {
+            $id instanceof AbstractUid => (string) $id,
+            \is_object($id) && $this->supports($id::class) => $this->dehydrate($id),
+            default => $id,
+        }, $id);
 
         switch (\count($id)) {
             case 0:
@@ -97,13 +105,26 @@ class DoctrineEntityHydrationExtension implements HydrationExtensionInterface
 
     private function lookUpObjectManager(string $class): ?ObjectManager
     {
-        if (!class_exists($class)) {
+        if (!class_exists($class) && !interface_exists($class)) {
             return null;
         }
 
         foreach ($this->managerRegistries as $registry) {
             if ($om = $registry->getManagerForClass($class)) {
                 return self::ensureManagedObject($om, $class);
+            }
+
+            // an interface mapped with "resolve_target_entities" belongs to the manager that resolves its metadata
+            if (interface_exists($class)) {
+                foreach ($registry->getManagers() as $om) {
+                    try {
+                        $om->getClassMetadata($class);
+                    } catch (MappingException) {
+                        continue;
+                    }
+
+                    return self::ensureManagedObject($om, $class);
+                }
             }
         }
 

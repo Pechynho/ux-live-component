@@ -2172,6 +2172,7 @@ var ValueStore_default = class {
 // src/Component/index.ts
 var MAX_ACTIONS_PER_BATCH = 50;
 var Component = class {
+<<<<<<< HEAD
   element;
   name;
   // key is the string event name and value is an array of action names
@@ -2658,6 +2659,346 @@ var Component = class {
     }
     return window.location.pathname + window.location.search === requestUrl;
   }
+=======
+	element;
+	name;
+	listeners;
+	backend;
+	elementDriver;
+	id;
+	fingerprint = "";
+	valueStore;
+	unsyncedInputsTracker;
+	hooks;
+	defaultDebounce = 150;
+	backendRequest = null;
+	pendingActions = [];
+	pendingFiles = {};
+	isRequestPending = false;
+	isRemoved = false;
+	requestDebounceTimeout = null;
+	nextRequestPromise;
+	nextRequestPromiseResolve;
+	externalMutationTracker;
+	constructor(element, name, props, listeners, id, backend, elementDriver) {
+		this.element = element;
+		this.name = name;
+		this.backend = backend;
+		this.elementDriver = elementDriver;
+		this.id = id;
+		this.listeners = /* @__PURE__ */ new Map();
+		listeners.forEach((listener) => {
+			if (!this.listeners.has(listener.event)) this.listeners.set(listener.event, []);
+			this.listeners.get(listener.event)?.push(listener.action);
+		});
+		this.valueStore = new ValueStore_default(props);
+		this.unsyncedInputsTracker = new UnsyncedInputsTracker_default(this, elementDriver);
+		this.hooks = new HookManager_default();
+		this.resetPromise();
+		this.externalMutationTracker = new ExternalMutationTracker_default(this.element, (element) => elementBelongsToThisComponent(element, this));
+		this.externalMutationTracker.start();
+	}
+	getOriginalId() {
+		this.externalMutationTracker.handlePendingChanges();
+		const originalIds = this.externalMutationTracker.getOriginalIds();
+		return originalIds.has(this.element) ? originalIds.get(this.element) : this.element.getAttribute("id");
+	}
+	addPlugin(plugin) {
+		plugin.attachToComponent(this);
+	}
+	connect() {
+		registerComponent(this);
+		this.hooks.triggerHook("connect", this);
+		this.unsyncedInputsTracker.activate();
+		this.externalMutationTracker.start();
+	}
+	disconnect() {
+		unregisterComponent(this);
+		this.hooks.triggerHook("disconnect", this);
+		this.clearRequestDebounceTimeout();
+		this.unsyncedInputsTracker.deactivate();
+		this.externalMutationTracker.stop();
+	}
+	on(hookName, callback) {
+		this.hooks.register(hookName, callback);
+	}
+	off(hookName, callback) {
+		this.hooks.unregister(hookName, callback);
+	}
+	set(model, value, reRender = false, debounce = false) {
+		const promise = this.nextRequestPromise;
+		const modelName = normalizeModelName(model);
+		if (!this.valueStore.has(modelName)) throw new Error(`Invalid model name "${model}".`);
+		const isChanged = this.valueStore.set(modelName, value);
+		this.hooks.triggerHook("model:set", model, value, this);
+		this.unsyncedInputsTracker.markModelAsSynced(modelName);
+		if (reRender && isChanged) this.debouncedStartRequest(debounce);
+		return promise;
+	}
+	getData(model) {
+		const modelName = normalizeModelName(model);
+		if (!this.valueStore.has(modelName)) throw new Error(`Invalid model "${model}".`);
+		return this.valueStore.get(modelName);
+	}
+	action(name, args = {}, debounce = false) {
+		const promise = this.nextRequestPromise;
+		this.pendingActions.push({
+			name,
+			args
+		});
+		this.debouncedStartRequest(debounce);
+		return promise;
+	}
+	files(key, input) {
+		this.pendingFiles[key] = input;
+	}
+	render() {
+		const promise = this.nextRequestPromise;
+		this.tryStartingRequest();
+		return promise;
+	}
+	getUnsyncedModels() {
+		return this.unsyncedInputsTracker.getUnsyncedModels();
+	}
+	emit(name, data, onlyMatchingComponentsNamed = null) {
+		this.performEmit(name, data, false, onlyMatchingComponentsNamed);
+	}
+	emitUp(name, data, onlyMatchingComponentsNamed = null) {
+		this.performEmit(name, data, true, onlyMatchingComponentsNamed);
+	}
+	emitSelf(name, data) {
+		this.doEmit(name, data);
+	}
+	performEmit(name, data, emitUp, matchingName) {
+		findComponents(this, emitUp, matchingName).forEach((component) => {
+			component.doEmit(name, data);
+		});
+	}
+	doEmit(name, data) {
+		if (!this.listeners.has(name)) return;
+		(this.listeners.get(name) || []).forEach((action) => {
+			this.action(action, data, 1);
+		});
+	}
+	isTurboEnabled() {
+		return typeof Turbo !== "undefined" && !this.element.closest("[data-turbo=\"false\"]");
+	}
+	removeFromPage() {
+		this.isRemoved = true;
+		this.disconnect();
+		const element = this.element;
+		for (const name of element.getAttributeNames()) if (name.startsWith("data-live-") && name.endsWith("-value")) element.removeAttribute(name);
+		element.setAttribute("data-live-removing", "");
+		requestAnimationFrame(() => {
+			const animations = (element.getAnimations?.({ subtree: true }) ?? []).filter((animation) => animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY);
+			Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+				element.remove();
+			});
+		});
+	}
+	tryStartingRequest() {
+		if (this.isRemoved) return;
+		if (!this.backendRequest) {
+			this.performRequest();
+			return;
+		}
+		this.isRequestPending = true;
+	}
+	performRequest() {
+		const thisPromiseResolve = this.nextRequestPromiseResolve;
+		this.resetPromise();
+		this.unsyncedInputsTracker.resetUnsyncedFields();
+		const filesToSend = {};
+		for (const [key, value] of Object.entries(this.pendingFiles)) if (value.files) filesToSend[key] = value.files;
+		const actionsToSend = this.pendingActions.slice(0, 50);
+		const remainingActions = this.pendingActions.slice(50);
+		const requestConfig = {
+			props: this.valueStore.getOriginalProps(),
+			actions: actionsToSend,
+			updated: this.valueStore.getDirtyProps(),
+			children: {},
+			updatedPropsFromParent: this.valueStore.getUpdatedPropsFromParent(),
+			files: filesToSend
+		};
+		this.hooks.triggerHook("request:started", requestConfig);
+		this.backendRequest = this.backend.makeRequest(requestConfig.props, requestConfig.actions, requestConfig.updated, requestConfig.children, requestConfig.updatedPropsFromParent, requestConfig.files);
+		this.hooks.triggerHook("loading.state:started", this.element, this.backendRequest);
+		const historyEntryKey = this.getCurrentHistoryEntryKey();
+		const requestUrl = window.location.pathname + window.location.search;
+		this.pendingActions = remainingActions;
+		this.valueStore.flushDirtyPropsToPending();
+		this.isRequestPending = remainingActions.length > 0;
+		this.backendRequest.promise.then(async (response) => {
+			const backendResponse = new BackendResponse_default(response);
+			const headers = backendResponse.response.headers;
+			for (const input of Object.values(this.pendingFiles)) input.value = "";
+			const html = await backendResponse.getBody();
+			if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect") && !headers.has("X-Live-Remove")) {
+				const controls = { displayError: true };
+				this.valueStore.pushPendingPropsBackToDirty();
+				this.hooks.triggerHook("loading.state:finished", this.element);
+				this.hooks.triggerHook("response:error", backendResponse, controls);
+				if (controls.displayError) this.renderError(html);
+				this.backendRequest = null;
+				thisPromiseResolve(backendResponse);
+				if (this.isRequestPending) {
+					this.isRequestPending = false;
+					this.performRequest();
+				}
+				return response;
+			}
+			if (backendResponse.isRemoved()) {
+				this.isRemoved = true;
+				this.processRerender(html, backendResponse);
+				this.backendRequest = null;
+				thisPromiseResolve(backendResponse);
+				this.removeFromPage();
+				return response;
+			}
+			const liveUrl = backendResponse.getLiveUrl();
+			if (liveUrl && this.element.isConnected && this.isOnSamePage(historyEntryKey, requestUrl)) history.replaceState(history.state, "", new URL(liveUrl + window.location.hash, window.location.origin));
+			this.processRerender(html, backendResponse);
+			this.backendRequest = null;
+			thisPromiseResolve(backendResponse);
+			if (this.isRequestPending) {
+				this.isRequestPending = false;
+				this.performRequest();
+			}
+			return response;
+		});
+	}
+	processRerender(html, backendResponse) {
+		const controls = { shouldRender: true };
+		this.hooks.triggerHook("render:started", html, backendResponse, controls);
+		if (!controls.shouldRender) return;
+		if (backendResponse.response.headers.get("Location")) {
+			if (this.isTurboEnabled()) Turbo.visit(backendResponse.response.headers.get("Location"));
+			else window.location.href = backendResponse.response.headers.get("Location") || "";
+			return;
+		}
+		this.hooks.triggerHook("loading.state:finished", this.element);
+		const modifiedModelValues = {};
+		Object.keys(this.valueStore.getDirtyProps()).forEach((modelName) => {
+			modifiedModelValues[modelName] = this.valueStore.get(modelName);
+		});
+		let newElement;
+		try {
+			newElement = htmlToElement(html);
+			if (!newElement.matches("[data-controller~=live]")) throw new Error("A live component template must contain a single root controller element.");
+		} catch (error) {
+			console.error(`There was a problem with the '${this.name}' component HTML returned:`, { id: this.id });
+			throw error;
+		}
+		this.externalMutationTracker.handlePendingChanges();
+		this.externalMutationTracker.stop();
+		executeMorphdom(this.element, newElement, this.unsyncedInputsTracker.getUnsyncedInputs(), (element) => getValueFromElement(element, this.valueStore), this.externalMutationTracker, findChildren(this));
+		this.externalMutationTracker.start();
+		const newProps = this.elementDriver.getComponentProps();
+		this.valueStore.reinitializeAllProps(newProps);
+		const eventsToEmit = this.elementDriver.getEventsToEmit();
+		const browserEventsToDispatch = this.elementDriver.getBrowserEventsToDispatch();
+		Object.keys(modifiedModelValues).forEach((modelName) => {
+			this.valueStore.set(modelName, modifiedModelValues[modelName]);
+		});
+		eventsToEmit.forEach(({ event, data, target, componentName }) => {
+			if (target === "up") {
+				this.emitUp(event, data, componentName);
+				return;
+			}
+			if (target === "self") {
+				this.emitSelf(event, data);
+				return;
+			}
+			this.emit(event, data, componentName);
+		});
+		browserEventsToDispatch.forEach(({ event, payload }) => {
+			this.element.dispatchEvent(new CustomEvent(event, {
+				detail: payload,
+				bubbles: true
+			}));
+		});
+		try {
+			const downloadUrl = backendResponse.getDownloadUrl();
+			const download = backendResponse.getDownload();
+			if (downloadUrl) triggerDownload({ url: downloadUrl });
+			else if (download) triggerDownload(download);
+		} catch (error) {
+			console.error("Could not start the download:", error);
+		}
+		this.hooks.triggerHook("render:finished", this);
+	}
+	calculateDebounce(debounce) {
+		if (debounce === true) return this.defaultDebounce;
+		if (debounce === false) return 0;
+		return debounce;
+	}
+	clearRequestDebounceTimeout() {
+		if (this.requestDebounceTimeout) {
+			clearTimeout(this.requestDebounceTimeout);
+			this.requestDebounceTimeout = null;
+		}
+	}
+	debouncedStartRequest(debounce) {
+		this.clearRequestDebounceTimeout();
+		this.requestDebounceTimeout = window.setTimeout(() => {
+			this.render();
+		}, this.calculateDebounce(debounce));
+	}
+	renderError(html) {
+		let modal = document.getElementById("live-component-error");
+		if (modal) modal.innerHTML = "";
+		else {
+			modal = document.createElement("div");
+			modal.id = "live-component-error";
+			modal.style.padding = "50px";
+			modal.style.backgroundColor = "rgba(0, 0, 0, .5)";
+			modal.style.zIndex = "100000";
+			modal.style.position = "fixed";
+			modal.style.top = "0px";
+			modal.style.bottom = "0px";
+			modal.style.left = "0px";
+			modal.style.right = "0px";
+			modal.style.display = "flex";
+			modal.style.flexDirection = "column";
+		}
+		const iframe = document.createElement("iframe");
+		iframe.style.borderRadius = "5px";
+		iframe.style.flexGrow = "1";
+		modal.appendChild(iframe);
+		document.body.prepend(modal);
+		document.body.style.overflow = "hidden";
+		if (iframe.contentWindow) {
+			iframe.contentWindow.document.open();
+			iframe.contentWindow.document.write(html);
+			iframe.contentWindow.document.close();
+		}
+		const closeModal = (modal) => {
+			modal?.remove();
+			document.body.style.overflow = "visible";
+		};
+		modal.addEventListener("click", () => closeModal(modal));
+		modal.setAttribute("tabindex", "0");
+		modal.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") closeModal(modal);
+		});
+		modal.focus();
+	}
+	resetPromise() {
+		this.nextRequestPromise = new Promise((resolve) => {
+			this.nextRequestPromiseResolve = resolve;
+		});
+	}
+	_updateFromParentProps(props) {
+		if (this.valueStore.storeNewPropsFromParent(props)) this.render();
+	}
+	getCurrentHistoryEntryKey() {
+		return window.navigation?.currentEntry?.key ?? null;
+	}
+	isOnSamePage(historyEntryKey, requestUrl) {
+		if (this.getCurrentHistoryEntryKey() === historyEntryKey) return true;
+		return window.location.pathname + window.location.search === requestUrl;
+	}
+>>>>>>> upstream/3.x
 };
 function proxifyComponent(component) {
   return new Proxy(component, {
@@ -3277,6 +3618,7 @@ var ValidatedFieldsPlugin_default = class {
     }
   }
 };
+<<<<<<< HEAD
 
 // src/live_controller.ts
 var LiveControllerDefault = class _LiveControllerDefault extends Controller {
@@ -3633,4 +3975,268 @@ export {
   Component,
   LiveControllerDefault as default,
   getComponent
+=======
+var LiveControllerDefault = class LiveControllerDefault extends Controller {
+	static values = {
+		name: String,
+		url: String,
+		props: {
+			type: Object,
+			default: {}
+		},
+		propsUpdatedFromParent: {
+			type: Object,
+			default: {}
+		},
+		listeners: {
+			type: Array,
+			default: []
+		},
+		eventsToEmit: {
+			type: Array,
+			default: []
+		},
+		eventsToDispatch: {
+			type: Array,
+			default: []
+		},
+		debounce: {
+			type: Number,
+			default: 150
+		},
+		fingerprint: {
+			type: String,
+			default: ""
+		},
+		requestMethod: {
+			type: String,
+			default: "post"
+		},
+		fetchCredentials: {
+			type: String,
+			default: "same-origin"
+		}
+	};
+	proxiedComponent;
+	mutationObserver;
+	component;
+	pendingActionTriggerModelElement = null;
+	elementEventListeners = [{
+		event: "input",
+		callback: (event) => this.handleInputEvent(event)
+	}, {
+		event: "change",
+		callback: (event) => this.handleChangeEvent(event)
+	}];
+	pendingFiles = {};
+	static backendFactory = (controller) => new Backend_default(controller.urlValue, controller.requestMethodValue, controller.fetchCredentialsValue);
+	initialize() {
+		this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
+		this.createComponent();
+	}
+	connect() {
+		if (JSON.stringify(this.propsValue) !== JSON.stringify(this.component.valueStore.getOriginalProps())) this.createComponent();
+		this.connectComponent();
+		this.mutationObserver.observe(this.element, { attributes: true });
+	}
+	disconnect() {
+		this.disconnectComponent();
+		this.mutationObserver.disconnect();
+	}
+	update(event) {
+		if (event.type === "input" || event.type === "change") throw new Error(`Since LiveComponents 2.3, you no longer need data-action="live#update" on form elements. Found on element: ${getElementAsTagText(event.currentTarget)}`);
+		this.updateModelFromElementEvent(event.currentTarget, null);
+	}
+	action(event) {
+		const params = event.params;
+		if (!params.action) throw new Error(`No action name provided on element: ${getElementAsTagText(event.currentTarget)}. Did you forget to add the "data-live-action-param" attribute?`);
+		const rawAction = params.action;
+		const actionArgs = { ...params };
+		delete actionArgs.action;
+		const directives = parseDirectives(rawAction);
+		let debounce = false;
+		directives.forEach((directive) => {
+			let pendingFiles = {};
+			const validModifiers = /* @__PURE__ */ new Map();
+			validModifiers.set("stop", () => {
+				event.stopPropagation();
+			});
+			validModifiers.set("self", () => {
+				if (event.target !== event.currentTarget) return;
+			});
+			validModifiers.set("debounce", (modifier) => {
+				debounce = modifier.value ? Number.parseInt(modifier.value) : true;
+			});
+			validModifiers.set("files", (modifier) => {
+				if (!modifier.value) pendingFiles = this.pendingFiles;
+				else if (this.pendingFiles[modifier.value]) pendingFiles[modifier.value] = this.pendingFiles[modifier.value];
+			});
+			directive.modifiers.forEach((modifier) => {
+				if (validModifiers.has(modifier.name)) {
+					(validModifiers.get(modifier.name) ?? (() => {}))(modifier);
+					return;
+				}
+				console.warn(`Unknown modifier ${modifier.name} in action "${rawAction}". Available modifiers are: ${Array.from(validModifiers.keys()).join(", ")}.`);
+			});
+			for (const [key, input] of Object.entries(pendingFiles)) {
+				if (input.files) this.component.files(key, input);
+				delete this.pendingFiles[key];
+			}
+			this.component.action(directive.action, actionArgs, debounce);
+			if (getModelDirectiveFromElement(event.currentTarget, false)) this.pendingActionTriggerModelElement = event.currentTarget;
+		});
+	}
+	$render() {
+		return this.component.render();
+	}
+	emit(event) {
+		this.getEmitDirectives(event).forEach(({ name, data, nameMatch }) => {
+			this.component.emit(name, data, nameMatch);
+		});
+	}
+	emitUp(event) {
+		this.getEmitDirectives(event).forEach(({ name, data, nameMatch }) => {
+			this.component.emitUp(name, data, nameMatch);
+		});
+	}
+	emitSelf(event) {
+		this.getEmitDirectives(event).forEach(({ name, data }) => {
+			this.component.emitSelf(name, data);
+		});
+	}
+	$updateModel(model, value, shouldRender = true, debounce = true) {
+		return this.component.set(model, value, shouldRender, debounce);
+	}
+	propsUpdatedFromParentValueChanged() {
+		this.component._updateFromParentProps(this.propsUpdatedFromParentValue);
+	}
+	fingerprintValueChanged() {
+		this.component.fingerprint = this.fingerprintValue;
+	}
+	getEmitDirectives(event) {
+		const params = event.params;
+		if (!params.event) throw new Error(`No event name provided on element: ${getElementAsTagText(event.currentTarget)}. Did you forget to add the "data-live-event-param" attribute?`);
+		const eventInfo = params.event;
+		const eventArgs = { ...params };
+		delete eventArgs.event;
+		const directives = parseDirectives(eventInfo);
+		const emits = [];
+		directives.forEach((directive) => {
+			let nameMatch = null;
+			directive.modifiers.forEach((modifier) => {
+				switch (modifier.name) {
+					case "name":
+						nameMatch = modifier.value;
+						break;
+					default: throw new Error(`Unknown modifier ${modifier.name} in event "${eventInfo}".`);
+				}
+			});
+			emits.push({
+				name: directive.action,
+				data: eventArgs,
+				nameMatch
+			});
+		});
+		return emits;
+	}
+	createComponent() {
+		const id = this.element.getAttribute("id") || null;
+		this.component = new Component(this.element, this.nameValue, this.propsValue, this.listenersValue, id, LiveControllerDefault.backendFactory(this), new StimulusElementDriver(this));
+		this.proxiedComponent = proxifyComponent(this.component);
+		Object.defineProperty(this.element, "__component", {
+			value: this.proxiedComponent,
+			writable: true
+		});
+		if (this.hasDebounceValue) this.component.defaultDebounce = this.debounceValue;
+		[
+			new LoadingPlugin_default(),
+			new LazyPlugin_default(),
+			new ValidatedFieldsPlugin_default(),
+			new PageUnloadingPlugin_default(),
+			new PollingPlugin_default(),
+			new SetValueOntoModelFieldsPlugin_default(),
+			new ChildComponentPlugin_default(this.component)
+		].forEach((plugin) => {
+			this.component.addPlugin(plugin);
+		});
+	}
+	connectComponent() {
+		this.component.connect();
+		this.mutationObserver.observe(this.element, { attributes: true });
+		this.elementEventListeners.forEach(({ event, callback }) => {
+			this.component.element.addEventListener(event, callback);
+		});
+		this.dispatchEvent("connect");
+	}
+	disconnectComponent() {
+		this.component.disconnect();
+		this.elementEventListeners.forEach(({ event, callback }) => {
+			this.component.element.removeEventListener(event, callback);
+		});
+		this.dispatchEvent("disconnect");
+	}
+	handleInputEvent(event) {
+		const target = event.target;
+		if (!target) return;
+		this.updateModelFromElementEvent(target, "input");
+	}
+	handleChangeEvent(event) {
+		const target = event.target;
+		if (!target) return;
+		this.updateModelFromElementEvent(target, "change");
+	}
+	updateModelFromElementEvent(element, eventName) {
+		if (!elementBelongsToThisComponent(element, this.component)) return;
+		if (!(element instanceof HTMLElement)) throw new Error("Could not update model for non HTMLElement");
+		if (element instanceof HTMLInputElement && element.type === "file") {
+			const key = element.name;
+			if (element.files?.length) this.pendingFiles[key] = element;
+			else if (this.pendingFiles[key]) delete this.pendingFiles[key];
+		}
+		const modelDirective = getModelDirectiveFromElement(element, false);
+		if (!modelDirective) return;
+		const modelBinding = get_model_binding_default(modelDirective);
+		if (!modelBinding.targetEventName) modelBinding.targetEventName = "input";
+		if (this.pendingActionTriggerModelElement === element) modelBinding.shouldRender = false;
+		if (eventName === "change" && modelBinding.targetEventName === "input") modelBinding.targetEventName = "change";
+		if (eventName && modelBinding.targetEventName !== eventName) return;
+		if (false === modelBinding.debounce) {
+			if (modelBinding.targetEventName === "input") modelBinding.debounce = true;
+			else modelBinding.debounce = 0;
+		}
+		const finalValue = getValueFromElement(element, this.component.valueStore);
+		const finalValueIsEmpty = finalValue === "" || finalValue === null || finalValue === void 0;
+		if (isTextualInputElement(element) || isTextareaElement(element)) {
+			if (!finalValueIsEmpty && modelBinding.minLength !== null && typeof finalValue === "string" && finalValue.length < modelBinding.minLength) return;
+			if (!finalValueIsEmpty && modelBinding.maxLength !== null && typeof finalValue === "string" && finalValue.length > modelBinding.maxLength) return;
+		}
+		if (isNumericalInputElement(element)) {
+			if (!finalValueIsEmpty) {
+				const numericValue = Number(finalValue);
+				if (modelBinding.minValue !== null && numericValue < modelBinding.minValue) return;
+				if (modelBinding.maxValue !== null && numericValue > modelBinding.maxValue) return;
+			}
+		}
+		this.component.set(modelBinding.modelName, finalValue, modelBinding.shouldRender, modelBinding.debounce);
+	}
+	dispatchEvent(name, detail = {}, canBubble = true, cancelable = false) {
+		detail.controller = this;
+		detail.component = this.proxiedComponent;
+		this.dispatch(name, {
+			detail,
+			prefix: "live",
+			cancelable,
+			bubbles: canBubble
+		});
+	}
+	onMutations(mutations) {
+		mutations.forEach((mutation) => {
+			if (mutation.type === "attributes" && mutation.attributeName === "id" && this.component.getOriginalId() !== this.component.id) {
+				this.disconnectComponent();
+				this.createComponent();
+				this.connectComponent();
+			}
+		});
+	}
+>>>>>>> upstream/3.x
 };

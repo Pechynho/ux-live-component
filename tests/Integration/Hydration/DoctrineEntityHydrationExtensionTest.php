@@ -11,12 +11,17 @@
 
 namespace Symfony\UX\LiveComponent\Tests\Integration\Hydration;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\UX\LiveComponent\Hydration\DoctrineEntityHydrationExtension;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\AliasedEntity;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\AliasedEntityInterface;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\CompositeIdEntity;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\ForeignKeyIdEntity;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\UuidIdEntity;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Factory\CompositeIdEntityFactory;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Factory\ForeignKeyIdEntityFactory;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Factory\UuidIdEntityFactory;
 use Zenstruck\Foundry\Test\Factories;
 use Zenstruck\Foundry\Test\ResetDatabase;
 
@@ -49,5 +54,58 @@ class DoctrineEntityHydrationExtensionTest extends KernelTestCase
 
         self::assertSame($foreignKeyIdEntity->id->id, $dehydrated);
         self::assertSame($foreignKeyIdEntity, $extension->hydrate($dehydrated, ForeignKeyIdEntity::class));
+    }
+
+    public function testSupportsInterfaceResolvedToEntity(): void
+    {
+        /** @var DoctrineEntityHydrationExtension $extension */
+        $extension = self::getContainer()->get('ux.live_component.doctrine_entity_hydration_extension');
+
+        self::assertTrue($extension->supports(AliasedEntityInterface::class));
+        self::assertTrue($extension->supports(AliasedEntity::class));
+        self::assertFalse($extension->supports(\Countable::class));
+    }
+
+    public function testHydrateInterfaceResolvedToEntity(): void
+    {
+        /** @var DoctrineEntityHydrationExtension $extension */
+        $extension = self::getContainer()->get('ux.live_component.doctrine_entity_hydration_extension');
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $entity = new AliasedEntity();
+        $entity->name = 'foo';
+        $em->persist($entity);
+        $em->flush();
+
+        $dehydrated = $extension->dehydrate($entity);
+
+        self::assertSame($entity->id, $dehydrated);
+        self::assertSame($entity, $extension->hydrate($dehydrated, AliasedEntityInterface::class));
+        self::assertNull($extension->hydrate(null, AliasedEntityInterface::class));
+    }
+
+    public function testHydrateNewEntityTypedWithResolvedInterface(): void
+    {
+        /** @var DoctrineEntityHydrationExtension $extension */
+        $extension = self::getContainer()->get('ux.live_component.doctrine_entity_hydration_extension');
+
+        $dehydrated = $extension->dehydrate(new AliasedEntity());
+        $hydrated = $extension->hydrate($dehydrated, AliasedEntityInterface::class);
+
+        self::assertSame([], $dehydrated);
+        self::assertInstanceOf(AliasedEntity::class, $hydrated);
+    }
+
+    public function testUuidId(): void
+    {
+        $uuidIdEntity = UuidIdEntityFactory::createOne();
+
+        /** @var DoctrineEntityHydrationExtension $extension */
+        $extension = self::getContainer()->get('ux.live_component.doctrine_entity_hydration_extension');
+
+        $dehydrated = $extension->dehydrate($uuidIdEntity);
+
+        self::assertSame($uuidIdEntity->id->toRfc4122(), $dehydrated);
+        self::assertSame($uuidIdEntity, $extension->hydrate($dehydrated, UuidIdEntity::class));
     }
 }

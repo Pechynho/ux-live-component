@@ -113,6 +113,7 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
     }
 
     connect() {
+<<<<<<< HEAD
         // [CUSTOM] When Stimulus reconnects a controller (disconnect → connect
         // without initialize), the old Component and its ValueStore survive.
         // If the server re-rendered with different props, recreate everything
@@ -120,6 +121,10 @@ export default class LiveControllerDefault extends Controller<HTMLElement> imple
         const currentProps = this.propsValue;
         const storedProps = this.component.valueStore.getOriginalProps();
         if (JSON.stringify(currentProps) !== JSON.stringify(storedProps)) {
+=======
+        // Stimulus reuses this controller when its element reconnects, so the props may have changed since initialize()
+        if (JSON.stringify(this.propsValue) !== JSON.stringify(this.component.valueStore.getOriginalProps())) {
+>>>>>>> upstream/3.x
             this.createComponent();
         }
 

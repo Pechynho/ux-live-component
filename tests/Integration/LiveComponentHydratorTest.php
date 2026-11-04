@@ -44,6 +44,7 @@ use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\Entity1;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\Entity2;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\ProductFixtureEntity;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\User;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\UuidIdEntity;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Enum\ColorEnum;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Enum\EmptyStringEnum;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Enum\IntEnum;
@@ -814,6 +815,28 @@ final class LiveComponentHydratorTest extends KernelTestCase
             ;
         }];
 
+        yield 'Array with objects: (de)hydrates entities with a Uuid identifier' => [static function () {
+            $entity1 = persist(UuidIdEntity::class);
+            $entity2 = persist(UuidIdEntity::class);
+
+            return HydrationTest::create(new class {
+                /**
+                 * @var UuidIdEntity[]
+                 */
+                #[LiveProp]
+                public array $entities = [];
+            })
+                ->mountWith(['entities' => [$entity1, $entity2]])
+                ->assertDehydratesTo([
+                    'entities' => [$entity1->id->toRfc4122(), $entity2->id->toRfc4122()],
+                ])
+                ->assertObjectAfterHydration(static function (object $object) use ($entity1, $entity2) {
+                    self::assertSame($entity1, $object->entities[0]);
+                    self::assertSame($entity2, $object->entities[1]);
+                })
+            ;
+        }];
+
         yield 'Enum: null remains null' => [static function () {
             return HydrationTest::create(new class {
                 #[LiveProp]
@@ -1042,6 +1065,50 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 ->assertObjectAfterHydration(static function (object $object) {
                     self::assertSame($object->customerDetailsCollection[0]->address->address, '3 rue du Bac');
                     self::assertSame($object->customerDetailsCollection[0]->address->city, 'Paris');
+                });
+        }];
+
+        yield 'Array of DTOs: a null item (de)hydrates correctly' => [static function () {
+            return HydrationTest::create(new class {
+                /**
+                 * @var Symfony\UX\LiveComponent\Tests\Fixtures\Dto\CustomerDetails[] $customerDetailsCollection
+                 */
+                #[LiveProp]
+                public array $customerDetailsCollection = [];
+
+                public function mount(): void
+                {
+                    $customerDetails = new CustomerDetails();
+                    $customerDetails->lastName = 'Matheo';
+                    $customerDetails->firstName = 'Daninos';
+                    $customerDetails->address = new Address();
+                    $customerDetails->address->address = '1 rue du Bac';
+                    $customerDetails->address->city = 'Paris';
+
+                    $this->customerDetailsCollection[] = $customerDetails;
+                    // an item added by LiveCollectionTrait is null until
+                    // its form entry has been filled in
+                    $this->customerDetailsCollection[] = null;
+                }
+            })
+                ->mountWith([])
+                ->assertDehydratesTo([
+                    'customerDetailsCollection' => [
+                        [
+                            'lastName' => 'Matheo',
+                            'firstName' => 'Daninos',
+                            'address' => [
+                                'address' => '1 rue du Bac',
+                                'city' => 'Paris',
+                            ],
+                        ],
+                        null,
+                    ],
+                ])
+                ->assertObjectAfterHydration(static function (object $object) {
+                    self::assertCount(2, $object->customerDetailsCollection);
+                    self::assertInstanceOf(CustomerDetails::class, $object->customerDetailsCollection[0]);
+                    self::assertNull($object->customerDetailsCollection[1]);
                 });
         }];
 
@@ -1512,6 +1579,66 @@ final class LiveComponentHydratorTest extends KernelTestCase
                 ])
                 ->userUpdatesProps([
                     'createdAt' => 'tomorrow',
+                ])
+                ->expectsExceptionDuringHydration(BadRequestHttpException::class, '/invalid date data/i')
+            ;
+        }];
+
+        yield 'Format-less date prop rejects overflown day' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public \DateTime $createdAt;
+
+                public function __construct()
+                {
+                    $this->createdAt = new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC'));
+                }
+            })
+                ->mountWith([
+                    'createdAt' => new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC')),
+                ])
+                ->userUpdatesProps([
+                    'createdAt' => '2026-02-31T12:00:00+00:00',
+                ])
+                ->expectsExceptionDuringHydration(BadRequestHttpException::class, '/invalid date data/i')
+            ;
+        }];
+
+        yield 'Format-less date prop rejects overflown time' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true)]
+                public \DateTime $createdAt;
+
+                public function __construct()
+                {
+                    $this->createdAt = new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC'));
+                }
+            })
+                ->mountWith([
+                    'createdAt' => new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC')),
+                ])
+                ->userUpdatesProps([
+                    'createdAt' => '2026-01-01T25:61:00+00:00',
+                ])
+                ->expectsExceptionDuringHydration(BadRequestHttpException::class, '/invalid date data/i')
+            ;
+        }];
+
+        yield 'Date prop with custom format rejects overflown day' => [static function () {
+            return HydrationTest::create(new class {
+                #[LiveProp(writable: true, format: 'Y-m-d')]
+                public \DateTime $createdAt;
+
+                public function __construct()
+                {
+                    $this->createdAt = new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC'));
+                }
+            })
+                ->mountWith([
+                    'createdAt' => new \DateTime('2024-04-05 10:00:00', new \DateTimeZone('UTC')),
+                ])
+                ->userUpdatesProps([
+                    'createdAt' => '2026-02-31',
                 ])
                 ->expectsExceptionDuringHydration(BadRequestHttpException::class, '/invalid date data/i')
             ;
