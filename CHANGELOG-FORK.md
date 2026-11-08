@@ -5,6 +5,11 @@ tracked in [CHANGELOG.md](CHANGELOG.md). Composer consumers reference the fork
 via `dev-3.x` (always the latest commit); the versions below refer to
 `assets/package.json`.
 
+## 3.7.2-pechynho
+
+- Sync with upstream `3.7.2` (no changes to the fork's TypeScript sources;
+  `assets/dist/` is unchanged).
+
 ## 3.7.0-pechynho
 
 - Sync with upstream `3.7.0`, which now contains symfony/ux#3537 (the
