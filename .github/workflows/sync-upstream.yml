@@ -63,11 +63,36 @@ jobs:
               exit 1
             fi
 
+            # assets/package.json conflicts on every upstream release: upstream
+            # bumps "version" and the fork keeps it as "<upstream>-pechynho".
+            # Merge the file again with our version reset to the base one, so
+            # only the upstream change of that line remains, then re-apply the
+            # suffix. Any other conflict in the file stays for manual resolution.
+            PKG=assets/package.json
+            if grep -qxF "$PKG" <<< "$CONFLICTED" && git show ":1:$PKG" > /dev/null 2>&1; then
+              TMP=$(mktemp -d)
+              git show ":1:$PKG" > "$TMP/base"
+              git show ":2:$PKG" > "$TMP/ours"
+              git show ":3:$PKG" > "$TMP/theirs"
+              get_version() { sed -nE 's/^\s*"version": "([^"]*)".*/\1/p' "$1" | head -n 1; }
+              set_version() { sed -i -E "0,/^(\s*\"version\": \")[^\"]*\"/s//\1$2\"/" "$1"; }
+              set_version "$TMP/ours" "$(get_version "$TMP/base")"
+              if git merge-file -p "$TMP/ours" "$TMP/base" "$TMP/theirs" > "$PKG"; then
+                set_version "$PKG" "$(get_version "$TMP/theirs")-pechynho"
+                git add "$PKG"
+                echo "Resolved $PKG version conflict: $(get_version "$PKG")"
+              else
+                git checkout --conflict=merge -- "$PKG"
+              fi
+              CONFLICTED=$(git diff --name-only --diff-filter=U)
+            fi
+
             # Determine if all conflicts are auto-resolvable:
             # - assets/dist/* → will be rebuilt
             # - .github/*    → will be cleaned up (fork deletes upstream .github files)
             CAN_AUTO_RESOLVE=true
             while IFS= read -r file; do
+              [ -z "$file" ] && continue
               case "$file" in
                 assets/dist/*) ;;
                 .github/*) ;;
