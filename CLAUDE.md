@@ -64,12 +64,13 @@ Pracovní kopie monorepa: `~/projects/symfony-ux` (fork `Pechynho/ux`), každá 
 | [#4021](https://github.com/symfony/ux/pull/4021) | `fix-component-stack-unbalanced` | TwigComponent | komponenta nezůstane na `ComponentStack` po chybě v pre-renderu + `kernel.reset` (přes `ComponentRenderer::reset()`, podle review @smnandre 2026-10-18) | Fix [#3894](https://github.com/symfony/ux/issues/3894) | **mergnuto** @Kocal (2026-10-18); výjimka v těle embedded komponenty (`try/finally` v `ComponentNode`) → případné samostatné PR | ne (jiný balíček) |
 | [#4022](https://github.com/symfony/ux/pull/4022) | `fix-deterministic-id-reset` | LiveComponent | `kernel.reset` pro `DeterministicTwigIdCalculator` | souvisí [#3894](https://github.com/symfony/ux/issues/3894) | **mergnuto** | přes upstream sync (3.5.4) |
 | [#4024](https://github.com/symfony/ux/pull/4024) | `fix-preserve-placeholder-explicit-id` | LiveComponent | placeholder potomka s explicitním `id` a změněnými props dostane `id` (chyba „data-live-preserve attribute requires an id“) | souvisí [#1643](https://github.com/symfony/ux/issues/1643) (zavřená bez opravy) | **mergnuto** (2026-10-19) | přes upstream sync (3.6.1) |
+| [#4127](https://github.com/symfony/ux/pull/4127) | `feat-live-response-skip-render` | LiveComponent | `LiveResponse::skipRender()`: akce aktualizuje props a emity bez renderu šablony (`X-Live-Skip-Render`, `BackendResponse.isRenderSkipped()`) | Fix [#4025](https://github.com/symfony/ux/issues/4025) | čeká (otevřeno 2026-10-20) | ne |
 
 **Naše RFC issue (návrhy před PR):**
 
 | Issue | Co | Stav |
 |---|---|---|
-| [#4025](https://github.com/symfony/ux/issues/4025) | `LiveResponse::skipRender()` + `LiveResponse::data(...)->withoutRender()`: akce aktualizuje props (a emity, LiveUrl) bez renderu šablony a bez morphu. Hlavička `X-Live-Skip-Render: 1`, tělo = prázdný kořenový element s live atributy. Otevřené otázky: `render:started`/`render:finished`, batch (přeskočit jen když všechny akce chtějí), kombinace s `data()`, název | čeká na maintainery, PR až po dohodě |
+| [#4025](https://github.com/symfony/ux/issues/4025) | `LiveResponse::skipRender()` + `LiveResponse::data(...)->withoutRender()`: akce aktualizuje props (a emity, LiveUrl) bez renderu šablony a bez morphu. Hlavička `X-Live-Skip-Render: 1`, tělo = prázdný kořenový element s live atributy. Otevřené otázky: `render:started`/`render:finished`, batch (přeskočit jen když všechny akce chtějí), kombinace s `data()`, název | bez reakce maintainerů; `skipRender()` otevřeno jako [PR #4127](https://github.com/symfony/ux/pull/4127) (2026-10-20), `data()->withoutRender()` zatím ne |
 
 Sloupec „Ve forku“ odkazuje na řádek v inventáři výše: po mergi PR se odpovídající odchylka z forku odstraní.
 
@@ -164,6 +165,7 @@ Upstream PR [#3928](https://github.com/symfony/ux/pull/3928) mergnut, fork použ
 GitHub Actions workflow, který běží denně v 06:00 UTC (a lze spustit ručně):
 - Stáhne commity z `symfony/ux-live-component:3.x` a provede merge
 - Konflikty v `assets/dist/` a `.github/` se řeší automaticky (dist se přebuildí, upstream .github soubory se smažou)
+- Konflikt `version` v `assets/package.json` (nastává při každém upstream release) se řeší automaticky na `<upstream verze>-pechynho`: soubor se znovu mergne s naší verzí vrácenou na merge-base, takže zbyde jen upstream změna řádku. Jiný konflikt v souboru zůstane k ručnímu řešení. `CHANGELOG-FORK.md` se pak doplní ručně.
 - Po merge automaticky spustí `yarn install && yarn build` a commitne nový dist
 - Pokud merge selže kvůli konfliktu ve **zdrojových souborech** (`.ts`, `.php`, …), force-pushne větev `upstream-sync` (s konfliktními markery) a vytvoří PR k manuálnímu řešení. Když PR vytvořit nejde, run **selže** (dřív zůstal zelený a sync měsíce stál bez povšimnutí). Vyžaduje v repu zapnuté *Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*.
 - Pokud víc než 10 souborů konfliktuje jako add/add, run selže s chybou — viz níže
