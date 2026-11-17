@@ -177,6 +177,14 @@ var BackendResponse_default = class {
   isRemoved() {
     return this.response.headers.has("X-Live-Remove");
   }
+  /**
+   * Whether the action changed the state without rendering the template.
+   *
+   * The body then holds only an empty element, which carries the new props and events in the live attributes of the root element.
+   */
+  isRenderSkipped() {
+    return this.response.headers.has("X-Live-No-Render");
+  }
   async parse() {
     const htmlLength = this.response.headers.get("X-Live-Html-Length");
     if (null === htmlLength) {
@@ -260,18 +268,6 @@ var findChildren = (currentComponent) => {
     if (!currentComponent.element.contains(component.element)) {
       return;
     }
-    let foundChildComponent = false;
-    componentMapByComponent.forEach((childComponentName, childComponent) => {
-      if (foundChildComponent) {
-        return;
-      }
-      if (childComponent === component) {
-        return;
-      }
-      if (childComponent.element.contains(component.element)) {
-        foundChildComponent = true;
-      }
-    });
     children.push(component);
   });
   return children;
@@ -1368,6 +1364,7 @@ var Idiomorph = (function() {
 })();
 
 // src/normalize_attributes_for_comparison.ts
+var REFLECTED_VALUE_TAG_NAMES = /* @__PURE__ */ new Set(["BUTTON", "DATA", "LI", "METER", "OPTION", "PROGRESS"]);
 function normalizeAttributesForComparison(element) {
   const isFileInput = element instanceof HTMLInputElement && element.type === "file";
   if (!isFileInput) {
@@ -1377,10 +1374,46 @@ function normalizeAttributesForComparison(element) {
       element.setAttribute("value", "");
     }
   }
-  Array.from(element.children).forEach((child) => {
+  for (let child = element.firstElementChild; child !== null; child = child.nextElementSibling) {
     normalizeAttributesForComparison(child);
-  });
+  }
 }
+function areNodesEqualAfterNormalization(fromEl, toEl) {
+  const comparison = compareFieldValues(fromEl, toEl);
+  if (comparison !== null) {
+    return comparison;
+  }
+  const normalizedFromEl = cloneHTMLElement(fromEl);
+  normalizeAttributesForComparison(normalizedFromEl);
+  const normalizedToEl = cloneHTMLElement(toEl);
+  normalizeAttributesForComparison(normalizedToEl);
+  return normalizedFromEl.isEqualNode(normalizedToEl);
+}
+var compareFieldValues = (fromEl, toEl) => {
+  const fromElements = fromEl.querySelectorAll("*");
+  let toElements = null;
+  for (let i = -1; i < fromElements.length; i++) {
+    const from = i === -1 ? fromEl : fromElements[i];
+    if (!("value" in from) || REFLECTED_VALUE_TAG_NAMES.has(from.tagName)) {
+      continue;
+    }
+    const isInput = from instanceof HTMLInputElement;
+    if (!isInput && !(from instanceof HTMLTextAreaElement)) {
+      return null;
+    }
+    if (isInput && from.type === "file") {
+      continue;
+    }
+    if (toElements === null) {
+      toElements = toEl.querySelectorAll("*");
+    }
+    const to = i === -1 ? toEl : toElements[i];
+    if (from.value !== to.value) {
+      return false;
+    }
+  }
+  return true;
+};
 
 // src/morphdom.ts
 var syncAttributes = (fromEl, toEl) => {
@@ -1499,11 +1532,7 @@ function executeMorphdom(rootFromElement, rootToElement, modifiedFieldElements, 
               }
             }
             if (fromEl.nodeName.toUpperCase() !== "OPTION" && fromEl.isEqualNode(toEl)) {
-              const normalizedFromEl = cloneHTMLElement(fromEl);
-              normalizeAttributesForComparison(normalizedFromEl);
-              const normalizedToEl = cloneHTMLElement(toEl);
-              normalizeAttributesForComparison(normalizedToEl);
-              if (normalizedFromEl.isEqualNode(normalizedToEl)) {
+              if (areNodesEqualAfterNormalization(fromEl, toEl)) {
                 return false;
               }
             }
@@ -1694,8 +1723,9 @@ var ExternalMutationTracker_default = class {
   changedElements = /* @__PURE__ */ new WeakMap();
   /** For testing */
   changedElementsCount = 0;
-  addedElements = [];
-  removedElements = [];
+  addedElements = /* @__PURE__ */ new Set();
+  /** Weak, so a node some external code removed is not kept alive by this tracker. */
+  removedElements = /* @__PURE__ */ new WeakSet();
   isStarted = false;
   originalIds = /* @__PURE__ */ new Map();
   constructor(element, shouldTrackChangeCallback) {
@@ -1734,10 +1764,10 @@ var ExternalMutationTracker_default = class {
     return this.originalIds;
   }
   getAddedElements() {
-    return this.addedElements;
+    return [...this.addedElements];
   }
   wasElementAdded(element) {
-    return this.addedElements.includes(element);
+    return this.addedElements.has(element);
   }
   /**
    * Forces any pending mutations to be handled immediately, then clears the queue.
@@ -1747,12 +1777,18 @@ var ExternalMutationTracker_default = class {
   }
   onMutations(mutations) {
     const handledAttributeMutations = /* @__PURE__ */ new WeakMap();
+    const shouldTrackElement = /* @__PURE__ */ new Map();
     for (const mutation of mutations) {
       const element = mutation.target;
-      if (!this.shouldTrackChangeCallback(element)) {
+      if (this.isElementAddedByTranslation(element)) {
         continue;
       }
-      if (this.isElementAddedByTranslation(element)) {
+      let isTracked = shouldTrackElement.get(element);
+      if (isTracked === void 0) {
+        isTracked = this.shouldTrackChangeCallback(element);
+        shouldTrackElement.set(element, isTracked);
+      }
+      if (!isTracked) {
         continue;
       }
       let isChangeInAddedElement = false;
@@ -1789,24 +1825,24 @@ var ExternalMutationTracker_default = class {
       if (!(node instanceof Element)) {
         return;
       }
-      if (this.removedElements.includes(node)) {
-        this.removedElements.splice(this.removedElements.indexOf(node), 1);
+      if (this.removedElements.has(node)) {
+        this.removedElements.delete(node);
         return;
       }
       if (this.isElementAddedByTranslation(node)) {
         return;
       }
-      this.addedElements.push(node);
+      this.addedElements.add(node);
     });
     mutation.removedNodes.forEach((node) => {
       if (!(node instanceof Element)) {
         return;
       }
-      if (this.addedElements.includes(node)) {
-        this.addedElements.splice(this.addedElements.indexOf(node), 1);
+      if (this.addedElements.has(node)) {
+        this.addedElements.delete(node);
         return;
       }
-      this.removedElements.push(node);
+      this.removedElements.add(node);
     });
   }
   handleAttributeMutation(mutation) {
@@ -1978,7 +2014,7 @@ var UnsyncedInputsTracker_default = class {
 };
 var UnsyncedInputContainer = class {
   unsyncedModelFields;
-  unsyncedNonModelFields = [];
+  unsyncedNonModelFields = /* @__PURE__ */ new Set();
   unsyncedModelNames = [];
   constructor() {
     this.unsyncedModelFields = /* @__PURE__ */ new Map();
@@ -1991,7 +2027,7 @@ var UnsyncedInputContainer = class {
       }
       return;
     }
-    this.unsyncedNonModelFields.push(element);
+    this.unsyncedNonModelFields.add(element);
   }
   /**
    * Mark all fields as synced, except for those not bound to a model or whose
@@ -2024,27 +2060,20 @@ var UnsyncedInputContainer = class {
 
 // src/data_manipulation_utils.ts
 function getDeepData(data, propertyPath) {
-  const { currentLevelData, finalKey } = parseDeepData(data, propertyPath);
-  if (currentLevelData === void 0) {
-    return void 0;
-  }
-  return currentLevelData[finalKey];
-}
-var parseDeepData = (data, propertyPath) => {
-  const finalData = JSON.parse(JSON.stringify(data));
-  let currentLevelData = finalData;
   const parts = propertyPath.split(".");
+  let currentLevelData = data;
   for (let i = 0; i < parts.length - 1; i++) {
     currentLevelData = currentLevelData[parts[i]];
   }
-  const finalKey = parts[parts.length - 1];
-  return {
-    currentLevelData,
-    finalData,
-    finalKey,
-    parts
-  };
-};
+  if (currentLevelData === void 0) {
+    return void 0;
+  }
+  const value = currentLevelData[parts[parts.length - 1]];
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
 
 // src/Component/ValueStore.ts
 var ValueStore_default = class {
@@ -2198,6 +2227,8 @@ var Component = class {
   pendingFiles = {};
   /** Is a request waiting to be made? */
   isRequestPending = false;
+  /** Was a re-render asked for since the last request started? It is still owed when an action skips the render. */
+  isRenderRequested = false;
   /** Once removed, the component is done: it must never talk to the server again. */
   isRemoved = false;
   /** Current "timeout" before the pending request should be sent. */
@@ -2275,6 +2306,7 @@ var Component = class {
     this.hooks.triggerHook("model:set", model, value, this);
     this.unsyncedInputsTracker.markModelAsSynced(modelName);
     if (reRender && isChanged) {
+      this.isRenderRequested = true;
       this.debouncedStartRequest(debounce);
     }
     return promise;
@@ -2300,6 +2332,7 @@ var Component = class {
   }
   render() {
     const promise = this.nextRequestPromise;
+    this.isRenderRequested = true;
     this.tryStartingRequest();
     return promise;
   }
@@ -2435,6 +2468,8 @@ var Component = class {
     this.pendingActions = remainingActions;
     this.valueStore.flushDirtyPropsToPending();
     this.isRequestPending = remainingActions.length > 0;
+    const isRenderRequested = this.isRenderRequested;
+    this.isRenderRequested = false;
     this.backendRequest.promise.then(async (response) => {
       const backendResponse = new BackendResponse_default(response);
       const headers = backendResponse.response.headers;
@@ -2445,6 +2480,7 @@ var Component = class {
       if (!headers.get("Content-Type")?.includes("application/vnd.live-component+html") && !headers.get("X-Live-Redirect") && !headers.has("X-Live-Remove")) {
         const controls = { displayError: true, resetLoadingState: false };
         this.valueStore.pushPendingPropsBackToDirty();
+        this.isRenderRequested ||= isRenderRequested;
         this.hooks.triggerHook("loading.state:finished", this.element);
         this.hooks.triggerHook("response:error", backendResponse, controls);
         if (controls.displayError) {
@@ -2475,6 +2511,10 @@ var Component = class {
         );
       }
       this.processRerender(html, backendResponse);
+      if (isRenderRequested && backendResponse.isRenderSkipped()) {
+        this.isRenderRequested = true;
+        this.isRequestPending = true;
+      }
       this.backendRequest = null;
       thisPromiseResolve(backendResponse);
       if (this.isRequestPending) {
@@ -2517,14 +2557,18 @@ var Component = class {
     }
     this.externalMutationTracker.handlePendingChanges();
     this.externalMutationTracker.stop();
-    executeMorphdom(
-      this.element,
-      newElement,
-      this.unsyncedInputsTracker.getUnsyncedInputs(),
-      (element) => getValueFromElement(element, this.valueStore),
-      this.externalMutationTracker,
-      findChildren(this)
-    );
+    if (backendResponse.isRenderSkipped()) {
+      this.applyValuesOfSkippedRender(newElement);
+    } else {
+      executeMorphdom(
+        this.element,
+        newElement,
+        this.unsyncedInputsTracker.getUnsyncedInputs(),
+        (element) => getValueFromElement(element, this.valueStore),
+        this.externalMutationTracker,
+        findChildren(this)
+      );
+    }
     this.externalMutationTracker.start();
     const newProps = this.elementDriver.getComponentProps();
     this.valueStore.reinitializeAllProps(newProps);
@@ -2565,6 +2609,25 @@ var Component = class {
     }
     this.hooks.triggerHook("render:finished", this);
   }
+  /**
+   * Takes the new props and events from the root element, and leaves the content alone.
+   *
+   * A value missing from the response is removed, or the events of the previous render would run again.
+   */
+  applyValuesOfSkippedRender(newElement) {
+    for (const name of [
+      "data-live-props-value",
+      "data-live-events-to-emit-value",
+      "data-live-events-to-dispatch-value"
+    ]) {
+      const value = newElement.getAttribute(name);
+      if (null === value) {
+        this.element.removeAttribute(name);
+      } else {
+        this.element.setAttribute(name, value);
+      }
+    }
+  }
   calculateDebounce(debounce) {
     if (debounce === true) {
       return this.defaultDebounce;
@@ -2583,7 +2646,7 @@ var Component = class {
   debouncedStartRequest(debounce) {
     this.clearRequestDebounceTimeout();
     this.requestDebounceTimeout = window.setTimeout(() => {
-      this.render();
+      this.tryStartingRequest();
     }, this.calculateDebounce(debounce));
   }
   // inspired by Livewire!
@@ -2884,6 +2947,39 @@ var LazyPlugin_default = class {
 };
 
 // src/Component/plugins/LoadingPlugin.ts
+var validModifiers = /* @__PURE__ */ new Map();
+validModifiers.set("delay", (modifier, _directive, isLoading, modifiers) => {
+  if (!isLoading) {
+    return;
+  }
+  modifiers.delay = modifier.value ? Number.parseInt(modifier.value) : 200;
+});
+validModifiers.set("action", (modifier, directive, _isLoading, modifiers) => {
+  if (!modifier.value) {
+    throw new Error(
+      `The "action" in data-loading must have an action name - e.g. action(foo). It's missing for "${directive.getString()}"`
+    );
+  }
+  modifiers.targetedActions.push(modifier.value);
+});
+validModifiers.set("model", (modifier, directive, _isLoading, modifiers) => {
+  if (!modifier.value) {
+    throw new Error(
+      `The "model" in data-loading must have an action name - e.g. model(foo). It's missing for "${directive.getString()}"`
+    );
+  }
+  modifiers.targetedModels.push(modifier.value);
+});
+var parsedDirectives = /* @__PURE__ */ new WeakMap();
+var getDirectives = (element, raw) => {
+  const cached = parsedDirectives.get(element);
+  if (cached && cached.raw === raw) {
+    return cached.directives;
+  }
+  const directives = parseDirectives(raw);
+  parsedDirectives.set(element, { raw, directives });
+  return directives;
+};
 var LoadingPlugin_default = class {
   attachToComponent(component) {
     component.on("loading.state:started", (element, request) => {
@@ -2919,43 +3015,18 @@ var LoadingPlugin_default = class {
   }
   handleLoadingDirective(element, isLoading, directive, backendRequest) {
     const finalAction = parseLoadingAction(directive.action, isLoading);
-    const targetedActions = [];
-    const targetedModels = [];
-    let delay = 0;
-    const validModifiers = /* @__PURE__ */ new Map();
-    validModifiers.set("delay", (modifier) => {
-      if (!isLoading) {
-        return;
-      }
-      delay = modifier.value ? Number.parseInt(modifier.value) : 200;
-    });
-    validModifiers.set("action", (modifier) => {
-      if (!modifier.value) {
-        throw new Error(
-          `The "action" in data-loading must have an action name - e.g. action(foo). It's missing for "${directive.getString()}"`
-        );
-      }
-      targetedActions.push(modifier.value);
-    });
-    validModifiers.set("model", (modifier) => {
-      if (!modifier.value) {
-        throw new Error(
-          `The "model" in data-loading must have an action name - e.g. model(foo). It's missing for "${directive.getString()}"`
-        );
-      }
-      targetedModels.push(modifier.value);
-    });
+    const modifiers = { delay: 0, targetedActions: [], targetedModels: [] };
     directive.modifiers.forEach((modifier) => {
-      if (validModifiers.has(modifier.name)) {
-        const callable = validModifiers.get(modifier.name) ?? (() => {
-        });
-        callable(modifier);
+      const callable = validModifiers.get(modifier.name);
+      if (callable) {
+        callable(modifier, directive, isLoading, modifiers);
         return;
       }
       throw new Error(
         `Unknown modifier "${modifier.name}" used in data-loading="${directive.getString()}". Available modifiers are: ${Array.from(validModifiers.keys()).join(", ")}.`
       );
     });
+    const { delay, targetedActions, targetedModels } = modifiers;
     if (isLoading && targetedActions.length > 0 && backendRequest && !backendRequest.containsOneOfActions(targetedActions)) {
       return;
     }
@@ -3007,7 +3078,7 @@ var LoadingPlugin_default = class {
       if (!(element2 instanceof HTMLElement) && !(element2 instanceof SVGElement)) {
         throw new Error("Invalid Element Type");
       }
-      const directives = parseDirectives(element2.dataset.loading || "show");
+      const directives = getDirectives(element2, element2.dataset.loading || "show");
       loadingDirectives.push({
         element: element2,
         directives
@@ -3109,6 +3180,7 @@ var PollingDirector_default = class {
     this.pollingIntervals.forEach((interval) => {
       clearInterval(interval);
     });
+    this.pollingIntervals = [];
   }
   clearPolling() {
     this.stopAllPolling();
@@ -3202,6 +3274,7 @@ var SetValueOntoModelFieldsPlugin_default = class {
    * the "firstName" model.
    */
   synchronizeValueOfModelFields(component) {
+    const unsyncedModels = component.getUnsyncedModels();
     component.element.querySelectorAll("[data-model]").forEach((element) => {
       if (!(element instanceof HTMLElement)) {
         throw new Error("Invalid element using data-model.");
@@ -3217,11 +3290,12 @@ var SetValueOntoModelFieldsPlugin_default = class {
         return;
       }
       const modelName = modelDirective.action;
-      if (component.getUnsyncedModels().includes(modelName)) {
+      if (unsyncedModels.includes(modelName)) {
         return;
       }
-      if (component.valueStore.has(modelName)) {
-        setValueOnElement(element, component.valueStore.get(modelName));
+      const value = component.valueStore.get(modelName);
+      if (value !== void 0) {
+        setValueOnElement(element, value);
       }
       if (element instanceof HTMLSelectElement && !element.multiple) {
         component.valueStore.set(modelName, getValueFromElement(element, component.valueStore));
@@ -3238,6 +3312,7 @@ var SetValueOntoModelFieldsPlugin_default = class {
    * https://github.com/symfony/ux/issues/3529
    */
   synchronizeValueOfSelectsMappedViaForm(component) {
+    const unsyncedModels = component.getUnsyncedModels();
     component.element.querySelectorAll("form[data-model] select[name]:not([data-model])").forEach((element) => {
       if (!(element instanceof HTMLSelectElement) || element.multiple) {
         return;
@@ -3250,7 +3325,7 @@ var SetValueOntoModelFieldsPlugin_default = class {
         return;
       }
       const modelName = modelDirective.action;
-      if (component.getUnsyncedModels().includes(modelName) || !component.valueStore.has(modelName)) {
+      if (unsyncedModels.includes(modelName) || component.valueStore.get(modelName) === void 0) {
         return;
       }
       component.valueStore.set(modelName, getValueFromElement(element, component.valueStore));
@@ -3307,13 +3382,14 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
     { event: "live:preserve-restored", callback: () => setTimeout(() => this.component.render(), 0) }
   ];
   pendingFiles = {};
+  isComponentFresh = false;
   static backendFactory = (controller) => new Backend_default(controller.urlValue, controller.requestMethodValue, controller.fetchCredentialsValue);
   initialize() {
     this.mutationObserver = new MutationObserver(this.onMutations.bind(this));
     this.createComponent();
   }
   connect() {
-    if (JSON.stringify(this.propsValue) !== JSON.stringify(this.component.valueStore.getOriginalProps())) {
+    if (!this.isComponentFresh && JSON.stringify(this.propsValue) !== JSON.stringify(this.component.valueStore.getOriginalProps())) {
       this.createComponent();
     }
     this.connectComponent();
@@ -3356,19 +3432,19 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
     let debounce = false;
     directives.forEach((directive) => {
       let pendingFiles = {};
-      const validModifiers = /* @__PURE__ */ new Map();
-      validModifiers.set("stop", () => {
+      const validModifiers2 = /* @__PURE__ */ new Map();
+      validModifiers2.set("stop", () => {
         event.stopPropagation();
       });
-      validModifiers.set("self", () => {
+      validModifiers2.set("self", () => {
         if (event.target !== event.currentTarget) {
           return;
         }
       });
-      validModifiers.set("debounce", (modifier) => {
+      validModifiers2.set("debounce", (modifier) => {
         debounce = modifier.value ? Number.parseInt(modifier.value) : true;
       });
-      validModifiers.set("files", (modifier) => {
+      validModifiers2.set("files", (modifier) => {
         if (!modifier.value) {
           pendingFiles = this.pendingFiles;
         } else if (this.pendingFiles[modifier.value]) {
@@ -3376,15 +3452,15 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
         }
       });
       directive.modifiers.forEach((modifier) => {
-        if (validModifiers.has(modifier.name)) {
-          const callable = validModifiers.get(modifier.name) ?? (() => {
+        if (validModifiers2.has(modifier.name)) {
+          const callable = validModifiers2.get(modifier.name) ?? (() => {
           });
           callable(modifier);
           return;
         }
         console.warn(
           `Unknown modifier ${modifier.name} in action "${rawAction}". Available modifiers are: ${Array.from(
-            validModifiers.keys()
+            validModifiers2.keys()
           ).join(", ")}.`
         );
       });
@@ -3499,8 +3575,10 @@ var LiveControllerDefault = class _LiveControllerDefault extends Controller {
     plugins.forEach((plugin) => {
       this.component.addPlugin(plugin);
     });
+    this.isComponentFresh = true;
   }
   connectComponent() {
+    this.isComponentFresh = false;
     this.component.connect();
     this.mutationObserver.observe(this.element, {
       attributes: true

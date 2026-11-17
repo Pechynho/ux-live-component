@@ -32,6 +32,12 @@ declare class export_default$2{
      * Whether the component is meant to leave the page after its final re-render.
      */
     isRemoved(): boolean;
+    /**
+     * Whether the action changed the state without rendering the template.
+     *
+     * The body then holds only an empty element, which carries the new props and events in the live attributes of the root element.
+     */
+    isRenderSkipped(): boolean;
     private parse;
 }
 
@@ -224,6 +230,8 @@ declare class Component {
     private pendingFiles;
     /** Is a request waiting to be made? */
     private isRequestPending;
+    /** Was a re-render asked for since the last request started? It is still owed when an action skips the render. */
+    private isRenderRequested;
     /** Once removed, the component is done: it must never talk to the server again. */
     private isRemoved;
     /** Current "timeout" before the pending request should be sent. */
@@ -292,6 +300,12 @@ declare class Component {
     private tryStartingRequest;
     private performRequest;
     private processRerender;
+    /**
+     * Takes the new props and events from the root element, and leaves the content alone.
+     *
+     * A value missing from the response is removed, or the events of the previous render would run again.
+     */
+    private applyValuesOfSkippedRender;
     private calculateDebounce;
     private clearRequestDebounceTimeout;
     private debouncedStartRequest;
@@ -393,6 +407,7 @@ declare class LiveControllerDefault extends Controller<HTMLElement> implements L
     pendingActionTriggerModelElement: HTMLElement | null;
     private elementEventListeners;
     private pendingFiles;
+    private isComponentFresh;
     static backendFactory: (controller: LiveControllerDefault) => BackendInterface;
     initialize(): void;
     connect(): void;
