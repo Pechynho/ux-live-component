@@ -13,8 +13,9 @@ export default class {
     private changedElements: WeakMap<Element, ElementChanges> = new WeakMap();
     /** For testing */
     public changedElementsCount = 0;
-    private addedElements: Array<Element> = [];
-    private removedElements: Array<Element> = [];
+    private addedElements: Set<Element> = new Set();
+    /** Weak, so a node some external code removed is not kept alive by this tracker. */
+    private removedElements: WeakSet<Element> = new WeakSet();
     private isStarted = false;
     private originalIds: Map<Element, string | null> = new Map();
 
@@ -62,11 +63,11 @@ export default class {
     }
 
     getAddedElements(): Element[] {
-        return this.addedElements;
+        return [...this.addedElements];
     }
 
     wasElementAdded(element: Element): boolean {
-        return this.addedElements.includes(element);
+        return this.addedElements.has(element);
     }
 
     /**
@@ -79,15 +80,23 @@ export default class {
     private onMutations(mutations: MutationRecord[]): void {
         // keyed by the Element the mutation occurred on, with an array of attribute string names
         const handledAttributeMutations: WeakMap<Element, string[]> = new WeakMap();
+        // the DOM does not move while a batch is processed
+        const shouldTrackElement: Map<Element, boolean> = new Map();
         for (const mutation of mutations) {
             const element = mutation.target as Element;
 
-            // ignore mutations that are not inside this component - e.g. inside a child
-            if (!this.shouldTrackChangeCallback(element)) {
+            if (this.isElementAddedByTranslation(element)) {
                 continue;
             }
 
-            if (this.isElementAddedByTranslation(element)) {
+            let isTracked = shouldTrackElement.get(element);
+            if (isTracked === undefined) {
+                // ignore mutations that are not inside this component - e.g. inside a child
+                isTracked = this.shouldTrackChangeCallback(element);
+                shouldTrackElement.set(element, isTracked);
+            }
+
+            if (!isTracked) {
                 continue;
             }
 
@@ -142,9 +151,9 @@ export default class {
                 return;
             }
 
-            if (this.removedElements.includes(node)) {
+            if (this.removedElements.has(node)) {
                 // this node was removed then added back, so no net change
-                this.removedElements.splice(this.removedElements.indexOf(node), 1);
+                this.removedElements.delete(node);
 
                 return;
             }
@@ -153,7 +162,7 @@ export default class {
                 return;
             }
 
-            this.addedElements.push(node);
+            this.addedElements.add(node);
         });
 
         mutation.removedNodes.forEach((node) => {
@@ -161,14 +170,14 @@ export default class {
                 return;
             }
 
-            if (this.addedElements.includes(node)) {
+            if (this.addedElements.has(node)) {
                 // this node was added then removed, so no net change
-                this.addedElements.splice(this.addedElements.indexOf(node), 1);
+                this.addedElements.delete(node);
 
                 return;
             }
 
-            this.removedElements.push(node);
+            this.removedElements.add(node);
         });
     }
 

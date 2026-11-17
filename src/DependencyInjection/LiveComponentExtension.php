@@ -44,6 +44,7 @@ use Symfony\UX\LiveComponent\Hydration\HydrationExtensionInterface;
 use Symfony\UX\LiveComponent\LiveComponentBundle;
 use Symfony\UX\LiveComponent\LiveComponentHydrator;
 use Symfony\UX\LiveComponent\LiveResponder;
+use Symfony\UX\LiveComponent\Metadata\LiveComponentMetadataCacheWarmer;
 use Symfony\UX\LiveComponent\Metadata\LiveComponentMetadataFactory;
 use Symfony\UX\LiveComponent\Twig\DeterministicTwigIdCalculator;
 use Symfony\UX\LiveComponent\Twig\LiveComponentExtension as LiveComponentTwigExtension;
@@ -58,6 +59,7 @@ use Symfony\UX\LiveComponent\Util\RequestPropsExtractor;
 use Symfony\UX\LiveComponent\Util\TwigAttributeHelperFactory;
 use Symfony\UX\TwigComponent\ComponentFactory;
 use Symfony\UX\TwigComponent\ComponentRenderer;
+use Twig\Environment;
 
 /**
  * @author Kevin Bond <kevinbond@gmail.com>
@@ -139,6 +141,8 @@ final class LiveComponentExtension extends Extension implements PrependExtension
             ->addTag('container.service_subscriber', ['key' => ComponentRenderer::class, 'id' => 'ux.twig_component.component_renderer'])
             ->addTag('container.service_subscriber', ['key' => LiveComponentHydrator::class, 'id' => 'ux.live_component.component_hydrator'])
             ->addTag('container.service_subscriber', ['key' => LiveComponentMetadataFactory::class, 'id' => 'ux.live_component.metadata_factory'])
+            ->addTag('container.service_subscriber', ['key' => LiveControllerAttributesCreator::class, 'id' => 'ux.live_component.live_controller_attributes_creator'])
+            ->addTag('container.service_subscriber', ['key' => Environment::class, 'id' => 'twig'])
         ;
 
         $container->register('ux.live_component.live_url_subscriber', LiveUrlSubscriber::class)
@@ -196,13 +200,33 @@ final class LiveComponentExtension extends Extension implements PrependExtension
             ->addTag('twig.runtime')
         ;
 
+        $container->setDefinition('cache.ux.live_component', new ChildDefinition('cache.system'))
+            ->addTag('cache.pool')
+        ;
+
+        $metadataCache = null;
+        // Editing a private property does not rebuild the container, so cached metadata would go stale in debug mode
+        if (!$container->getParameter('kernel.debug')) {
+            $metadataCache = new Reference('cache.ux.live_component', ContainerInterface::IGNORE_ON_INVALID_REFERENCE);
+        }
+
         $container->register('ux.live_component.metadata_factory', LiveComponentMetadataFactory::class)
             ->setArguments([
                 new Reference('ux.twig_component.component_factory'),
                 new Reference('property_info'),
                 new Reference('type_info.resolver'),
+                $metadataCache,
             ])
             ->addTag('kernel.reset', ['method' => 'reset'])
+        ;
+
+        $container->register('ux.live_component.metadata_cache_warmer', LiveComponentMetadataCacheWarmer::class)
+            ->setArguments([
+                new Reference(\Psr\Container\ContainerInterface::class),
+                new AbstractArgument(\sprintf('Added in %s.', LiveComponentPass::class)),
+            ])
+            ->addTag('kernel.cache_warmer')
+            ->addTag('container.service_subscriber', ['key' => LiveComponentMetadataFactory::class, 'id' => 'ux.live_component.metadata_factory'])
         ;
 
         $container->register(ComponentValidator::class)
