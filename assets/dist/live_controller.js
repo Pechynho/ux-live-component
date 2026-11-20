@@ -2762,6 +2762,9 @@ function triggerDownload(download) {
     download: fromUrl ? "" : download.filename,
     style: "display: none"
   });
+  if (link.protocol === "javascript:") {
+    throw new Error("JavaScript download URLs are not allowed.");
+  }
   document.body.appendChild(link);
   link.click();
   setTimeout(() => {
