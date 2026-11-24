@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\UX\LiveComponent\Tests\Fixtures\Component\Component2;
 use Symfony\UX\LiveComponent\Tests\Fixtures\Entity\Entity1;
 use Symfony\UX\LiveComponent\Tests\LiveComponentTestHelper;
 use Zenstruck\Browser\Test\HasBrowser;
@@ -155,6 +156,29 @@ final class LiveComponentSubscriberTest extends KernelTestCase
         ;
     }
 
+    public function testComponentIsOnlyServedOnTheRouteItIsConfiguredWith(): void
+    {
+        $props = $this->dehydrateComponent($this->mountComponent('alternate_route'))->getProps();
+        $defaultRouteProps = $this->dehydrateComponent($this->mountComponent('component2'))->getProps();
+
+        $this->browser()
+            ->post('/alt/alternate_route', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertSuccessful()
+            ->assertContains('count: 0')
+            ->post('/alt/alternate_route/increase', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertSuccessful()
+            ->assertContains('count: 1')
+            ->post('/_components/alternate_route', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertStatus(404)
+            ->post('/_components/alternate_route/increase', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertStatus(404)
+            ->post('/_components/alternate_route/_batch', ['body' => ['data' => json_encode(['props' => $props, 'actions' => [['name' => 'increase']]])]])
+            ->assertStatus(404)
+            ->post('/alt/component2', ['body' => ['data' => json_encode(['props' => $defaultRouteProps])]])
+            ->assertStatus(404)
+        ;
+    }
+
     public function testCannotExecuteComponentActionForGetRequest(): void
     {
         $this->browser()
@@ -168,6 +192,23 @@ final class LiveComponentSubscriberTest extends KernelTestCase
         $this->browser()
             ->get('/_components/with_method_post/__invoke')
             ->assertStatus(405)
+        ;
+    }
+
+    public function testCannotReachComponentWithItsClassName(): void
+    {
+        $props = $this->dehydrateComponent($this->mountComponent('component2'))->getProps();
+        $url = '/_components/'.rawurlencode(Component2::class);
+
+        $this->browser()
+            ->post('/_components/component2', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertSuccessful()
+            ->post($url, ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertStatus(404)
+            ->post($url.'/increase', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertStatus(404)
+            ->post($url.'/_batch', ['body' => ['data' => json_encode(['props' => $props, 'actions' => [['name' => 'increase']]])]])
+            ->assertStatus(404)
         ;
     }
 
@@ -414,6 +455,30 @@ final class LiveComponentSubscriberTest extends KernelTestCase
             ->post('/_components/with_security?props='.urlencode(json_encode($dehydrated->getProps())))
             ->assertSuccessful()
         ;
+    }
+
+    public function testUnprocessableEntityBeforeTheActionDoesNotRenderComponent(): void
+    {
+        $props = $this->dehydrateComponent($this->mountComponent('with_security'))->getProps();
+
+        $browser = $this->browser()
+            ->post('/_components/with_security/goToPage?page=abc', ['body' => ['data' => json_encode(['props' => $props])]])
+            ->assertStatus(422)
+        ;
+        $this->assertStringNotContainsString('Successful.', $browser->client()->getResponse()->getContent());
+
+        $browser
+            ->post('/_components/with_security/_batch?page=abc', ['body' => ['data' => json_encode(['props' => $props, 'actions' => [['name' => 'goToPage']]])]])
+            ->assertStatus(422)
+        ;
+        $this->assertStringNotContainsString('Successful.', $browser->client()->getResponse()->getContent());
+
+        $browser
+            ->actingAs(new InMemoryUser('kevin', 'pass', ['ROLE_USER']))
+            ->post('/_components/with_security/_batch?page=abc', ['body' => ['data' => json_encode(['props' => $props, 'actions' => [['name' => 'setUsername'], ['name' => 'goToPage']]])]])
+            ->assertStatus(422)
+        ;
+        $this->assertStringNotContainsString('Successful.', $browser->client()->getResponse()->getContent());
     }
 
     public function testCanInjectSecurityUserIntoAction(): void
